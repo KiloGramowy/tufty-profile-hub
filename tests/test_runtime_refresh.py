@@ -84,6 +84,20 @@ class RuntimeRefreshTests(unittest.TestCase):
         self.assertEqual(self.wdg_fetch.calls, [])
         self.assertEqual(self.wigle_fetch.calls, [])
 
+    def test_high_app_start_ticks_do_not_make_background_refresh_immediately_due(self):
+        start = (1 << 30) + 12345
+        self.configure_runtime(start=start)
+
+        runtime.refresh_background(start)
+        self.assertEqual(self.wdg_fetch.calls, [])
+        self.assertEqual(self.wigle_fetch.calls, [])
+        self.assertEqual(runtime.wdg_next_auto, start + SIX_HOURS_MS)
+        self.assertEqual(runtime.wigle_next_auto, start + SIX_HOURS_MS)
+
+        runtime.refresh_background(start + SIX_HOURS_MS)
+        self.assertEqual(len(self.wdg_fetch.calls), 1)
+        self.assertEqual(len(self.wigle_fetch.calls), 1)
+
     def test_both_integrations_are_due_after_six_hours_on_main_page(self):
         runtime.page_index = 0
         runtime.refresh_current(SIX_HOURS_MS - 1, entered=False)

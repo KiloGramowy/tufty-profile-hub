@@ -15,6 +15,7 @@ All notable changes to Tufty Profile Hub will be documented in this file.
 - Six-hour automatic refresh policy while Profile Hub is running.
 - Live integration refresh on page entry with a 60-second cooldown.
 - Automatic integration attempts are scheduled separately from successful sync time so offline failures do not create retry loops.
+- Automatic refresh due times stay in the same monotonic `badge.ticks` range, avoiding accidental immediate background refreshes on long-running devices.
 - Optional multi-WiFi support with standard `/secrets.py` fallback.
 - Documentation for architecture, integrations, Wi-Fi, and Badgeware installation.
 - Local validation suite for syntax, JSON validation, builder checks, and unit tests.

@@ -155,8 +155,7 @@ def attempt_ready(now, last_attempt, cooldown_ms):
 
 
 def ticks_add(ticks, delta):
-    wrap = 1 << 30
-    return (int(ticks) + int(delta)) % wrap
+    return int(ticks) + int(delta)
 
 
 def offline_status(previous):
