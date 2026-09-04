@@ -25,6 +25,8 @@ APP_FILES = (
 DEFAULT_AUTO_REFRESH_HOURS = 6
 DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS = 60
 DEFAULT_INPUT_DELAY_MS = 180
+DEFAULT_AUTO_BRIGHTNESS_MIN = 0.22
+DEFAULT_AUTO_BRIGHTNESS_MAX = 1.0
 DEFAULT_PAGE_ORDER = ("main", "website", "youtube", "github", "wdgwars", "wigle")
 ID_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 
@@ -308,6 +310,9 @@ def render_profile_config(config: dict[str, Any]) -> str:
         f"WIGLE_PAGE_ENTRY_COOLDOWN_MS = {int(wigle['page_entry_cooldown_seconds']) * 1000}\n\n"
         f"RETRY_MS = {DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS * 1000}\n"
         f"INPUT_DELAY_MS = {DEFAULT_INPUT_DELAY_MS}\n\n"
+        "AUTO_BRIGHTNESS_ENABLED = True\n"
+        f"AUTO_BRIGHTNESS_MIN = {DEFAULT_AUTO_BRIGHTNESS_MIN!r}\n"
+        f"AUTO_BRIGHTNESS_MAX = {DEFAULT_AUTO_BRIGHTNESS_MAX!r}\n\n"
         f"PROFILE = {_python_literal(config['profile'])}\n\n"
         f"PAGES = {_python_literal(config['pages'])}\n\n"
         f"INTEGRATIONS = {_python_literal(config['integrations'])}\n"

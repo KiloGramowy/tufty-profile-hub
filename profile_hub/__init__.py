@@ -123,6 +123,25 @@ wigle_status = "IDLE"
 wigle_last_sync = -cfg.WIGLE_REFRESH_MS
 wigle_last_attempt = -getattr(cfg, "WIGLE_PAGE_ENTRY_COOLDOWN_MS", cfg.RETRY_MS)
 
+AUTO_BRIGHTNESS_DEFAULT = 0.70
+AUTO_BRIGHTNESS_SAMPLE_MS = 250
+AUTO_BRIGHTNESS_SMOOTHING = 0.35
+AUTO_BRIGHTNESS_HYSTERESIS = 0.025
+AUTO_BRIGHTNESS_CURVE = (
+    (0, 0.22),
+    (80, 0.22),
+    (300, 0.32),
+    (1000, 0.45),
+    (2500, 0.58),
+    (5000, 0.70),
+    (12000, 0.88),
+    (25000, 1.0),
+)
+
+auto_brightness_last_sample = -AUTO_BRIGHTNESS_SAMPLE_MS
+auto_brightness_smoothed = AUTO_BRIGHTNESS_DEFAULT
+auto_brightness_applied = AUTO_BRIGHTNESS_DEFAULT
+
 
 def _wdg_cooldown_ms():
     return getattr(cfg, "WDGWARS_PAGE_ENTRY_COOLDOWN_MS", cfg.RETRY_MS)
@@ -130,6 +149,95 @@ def _wdg_cooldown_ms():
 
 def _wigle_cooldown_ms():
     return getattr(cfg, "WIGLE_PAGE_ENTRY_COOLDOWN_MS", cfg.RETRY_MS)
+
+
+def _clamp(value, low, high):
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+
+def _brightness_bounds():
+    low = float(getattr(cfg, "AUTO_BRIGHTNESS_MIN", 0.22))
+    high = float(getattr(cfg, "AUTO_BRIGHTNESS_MAX", 1.0))
+    if high < low:
+        high = low
+    return low, high
+
+
+def brightness_for_light_level(raw):
+    raw = int(raw)
+    minimum, maximum = _brightness_bounds()
+
+    if raw <= AUTO_BRIGHTNESS_CURVE[0][0]:
+        return _clamp(AUTO_BRIGHTNESS_CURVE[0][1], minimum, maximum)
+
+    previous_raw, previous_value = AUTO_BRIGHTNESS_CURVE[0]
+    for next_raw, next_value in AUTO_BRIGHTNESS_CURVE[1:]:
+        if raw <= next_raw:
+            span = next_raw - previous_raw
+            if span <= 0:
+                value = next_value
+            else:
+                ratio = float(raw - previous_raw) / float(span)
+                value = previous_value + (next_value - previous_value) * ratio
+            return _clamp(value, minimum, maximum)
+        previous_raw, previous_value = next_raw, next_value
+
+    return _clamp(AUTO_BRIGHTNESS_CURVE[-1][1], minimum, maximum)
+
+
+def auto_brightness_enabled():
+    return bool(getattr(cfg, "AUTO_BRIGHTNESS_ENABLED", True))
+
+
+def apply_startup_brightness():
+    if not BADGEWARE_READY or not auto_brightness_enabled():
+        return False
+    try:
+        display.backlight(auto_brightness_applied)
+        return True
+    except (AttributeError, OSError, RuntimeError):
+        return False
+
+
+def update_auto_brightness(now):
+    global auto_brightness_last_sample, auto_brightness_smoothed, auto_brightness_applied
+
+    if not auto_brightness_enabled():
+        return False
+    if now - auto_brightness_last_sample < AUTO_BRIGHTNESS_SAMPLE_MS:
+        return False
+
+    auto_brightness_last_sample = now
+
+    try:
+        raw = badge.light_level()
+    except (AttributeError, OSError, RuntimeError):
+        return False
+
+    target = brightness_for_light_level(raw)
+    auto_brightness_smoothed = (
+        auto_brightness_smoothed * (1.0 - AUTO_BRIGHTNESS_SMOOTHING)
+        + target * AUTO_BRIGHTNESS_SMOOTHING
+    )
+    auto_brightness_smoothed = _clamp(auto_brightness_smoothed, *_brightness_bounds())
+
+    if abs(auto_brightness_smoothed - auto_brightness_applied) < AUTO_BRIGHTNESS_HYSTERESIS:
+        return False
+
+    try:
+        display.backlight(auto_brightness_smoothed)
+    except (AttributeError, OSError, RuntimeError):
+        return False
+
+    auto_brightness_applied = auto_brightness_smoothed
+    return True
+
+
+apply_startup_brightness()
 
 
 def vmeasure(text, size):
@@ -522,6 +630,8 @@ def update():
 
     now = badge.ticks
     old_page = PAGES[page_index]
+
+    update_auto_brightness(now)
 
     if now - last_input > cfg.INPUT_DELAY_MS:
         if badge.pressed(BUTTON_C):

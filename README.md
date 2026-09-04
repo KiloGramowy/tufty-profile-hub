@@ -56,6 +56,7 @@ Profile Hub running on a physical Pimoroni Tufty 2350. WDGWars and WiGLE screens
 - WDGWars integration with setup-safe blank credentials.
 - WiGLE.net integration with setup-safe blank credentials.
 - Standard Pimoroni `/secrets.py` Wi-Fi with non-fatal offline handling.
+- Automatic ambient-light display brightness using Tufty 2350's built-in light sensor.
 - Host-side QR generation, so Tufty does not need `qrcode` or Pillow.
 - 24x24 PNG launcher icon inspired by the XIAO ESP32-C5 board shape.
 
@@ -178,6 +179,10 @@ WIFI_PASSWORD = "..."
 ```
 
 Profile Hub uses `profile_hub/safe_wifi.py` for Wi-Fi. It starts connection attempts without invoking Pimoroni's fatal system Wi-Fi helper and returns `True`, `None`, or `False` for connected, connecting, or unavailable/failed states. Missing access points, wrong passwords, timeouts, and missing `/secrets.py` values stay inside the Profile Hub UI as normal OFFLINE/CACHED states.
+
+## 💡 Brightness
+
+Profile Hub adapts display brightness automatically using Tufty 2350's built-in ambient light sensor. Dark environments stay readable at a low minimum brightness, normal indoor lighting uses a comfortable mid-range, and strong light raises the screen to full brightness. The screen is never automatically turned off, and no external hardware is required.
 
 ## 🔐 Security
 

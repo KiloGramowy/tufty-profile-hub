@@ -70,6 +70,9 @@ class BuilderTests(unittest.TestCase):
             self.assertEqual(config_module.WDGWARS_PAGE_ENTRY_COOLDOWN_MS, 60 * 1000)
             self.assertEqual(config_module.WIGLE_REFRESH_MS, 6 * 60 * 60 * 1000)
             self.assertEqual(config_module.WIGLE_PAGE_ENTRY_COOLDOWN_MS, 60 * 1000)
+            self.assertIs(config_module.AUTO_BRIGHTNESS_ENABLED, True)
+            self.assertEqual(config_module.AUTO_BRIGHTNESS_MIN, 0.22)
+            self.assertEqual(config_module.AUTO_BRIGHTNESS_MAX, 1.0)
 
     def test_attribution_is_hardcoded_in_runtime_not_generated_config(self):
         runtime_text = (ROOT / "profile_hub" / "__init__.py").read_text(encoding="utf-8")
@@ -173,6 +176,17 @@ class BuilderTests(unittest.TestCase):
             config["integrations"]["wigle"]["page_entry_cooldown_seconds"],
             60,
         )
+
+    def test_auto_brightness_defaults_are_generated_without_profile_knobs(self):
+        profile, credentials = self.load_examples()
+        profile["auto_brightness_enabled"] = False
+        config = build_profile.normalize(profile, credentials)
+        rendered = build_profile.render_profile_config(config)
+
+        self.assertIn("AUTO_BRIGHTNESS_ENABLED = True", rendered)
+        self.assertIn("AUTO_BRIGHTNESS_MIN = 0.22", rendered)
+        self.assertIn("AUTO_BRIGHTNESS_MAX = 1.0", rendered)
+        self.assertNotIn("auto_brightness_enabled", rendered)
 
     def test_runtime_sources_do_not_import_host_qr_dependencies(self):
         for path in (ROOT / "profile_hub").glob("*.py"):
