@@ -1,3 +1,4 @@
+import importlib
 import sys
 import unittest
 from pathlib import Path
@@ -6,14 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "profile_hub"))
 
-from wdgwars import WDGWarsClient, fetch as fetch_wdgwars
-from wigle import (
-    WiGLEClient,
-    basic_auth_header,
-    fetch as fetch_wigle,
-    normalize_runtime_data as normalize_wigle_runtime_data,
-    normalize_stats,
-)
+import wdgwars
+import wigle
 
 
 class FakeResponse:
@@ -33,223 +28,90 @@ class FakeRequests:
         self.payloads = payloads or {}
         self.calls = []
 
-    def get(self, url, headers=None, timeout=None):
-        self.calls.append({"url": url, "headers": headers or {}, "timeout": timeout})
+    def get(self, url, headers=None):
+        self.calls.append({"url": url, "headers": headers or {}})
         return FakeResponse(self.payloads.get(url, {}))
 
 
-class OfflineNetwork:
-    def ensure_connected(self):
-        return False
-
-
-class ConnectingNetwork:
-    def ensure_connected(self):
-        return None
-
-
-class OnlineNetwork:
-    def __init__(self):
-        self.calls = 0
-
-    def ensure_connected(self):
-        self.calls += 1
-        return True
-
-
 class RaisingRequests:
-    def get(self, url, headers=None, timeout=None):
+    def get(self, url, headers=None):
         raise OSError("network down")
 
 
-class Clock:
-    def __init__(self, value=1000):
-        self.value = value
-
-    def __call__(self):
-        return self.value
-
-    def advance(self, seconds):
-        self.value += seconds
-
-
 class IntegrationTests(unittest.TestCase):
+    def setUp(self):
+        importlib.reload(wdgwars)
+        importlib.reload(wigle)
+        wdgwars.safe_net.connect = lambda: True
+        wigle.safe_net.connect = lambda: True
+
     def test_wdgwars_blank_api_key_makes_no_request(self):
         requests = FakeRequests()
-        client = WDGWarsClient(api_key="", requests_module=requests)
-        self.assertEqual(client.page_entry_refresh(), "setup-required")
-        self.assertEqual(requests.calls, [])
-        self.assertEqual(fetch_wdgwars("", None, OnlineNetwork(), requests), ("NO KEY", None))
+        wdgwars.requests = requests
+
+        self.assertEqual(wdgwars.fetch("", None), ("NO KEY", None))
         self.assertEqual(requests.calls, [])
 
     def test_wigle_blank_credentials_make_no_request(self):
         requests = FakeRequests()
-        client = WiGLEClient(api_name="", api_token="", requests_module=requests)
-        self.assertEqual(client.refresh(), "setup-required")
-        self.assertEqual(requests.calls, [])
-        self.assertEqual(fetch_wigle("", "", None, OnlineNetwork(), requests), ("NO KEY", None))
+        wigle.requests = requests
+
+        self.assertEqual(wigle.fetch("", "", None), ("NO KEY", None))
         self.assertEqual(requests.calls, [])
 
     def test_connecting_network_defers_authenticated_requests(self):
         requests = FakeRequests()
-        self.assertEqual(fetch_wdgwars("demo", None, ConnectingNetwork(), requests), ("CONNECTING", None))
-        self.assertEqual(
-            fetch_wigle("demo-name", "demo-value", None, ConnectingNetwork(), requests),
-            ("CONNECTING", None),
-        )
+        wdgwars.requests = requests
+        wigle.requests = requests
+        wdgwars.safe_net.connect = lambda: None
+        wigle.safe_net.connect = lambda: None
+
+        self.assertEqual(wdgwars.fetch("demo", None), ("CONNECTING", None))
+        self.assertEqual(wigle.fetch("demo-name", "demo-value", None), ("CONNECTING", None))
         self.assertEqual(requests.calls, [])
 
-    def test_wdgwars_refresh_policy_and_cooldown(self):
-        clock = Clock()
-        requests = FakeRequests(
-            {
-                "https://wdgwars.pl/api/me": {
-                    "username": "demo",
-                    "wifi": 10,
-                    "bluetooth": 2,
-                    "aircraft": 1,
-                },
-                "https://wdgwars.pl/api/leaderboard": {
-                    "ranks": {"today": 3, "week": 2, "all_time": 1}
-                },
-            }
-        )
-        client = WDGWarsClient(api_key="demo", requests_module=requests, clock=clock)
+    def test_wdgwars_offline_without_previous_data_reports_offline(self):
+        wdgwars.requests = FakeRequests()
+        wdgwars.safe_net.connect = lambda: False
 
-        self.assertFalse(client.should_auto_refresh())
-        self.assertEqual(client.page_entry_refresh(), "ok")
-        self.assertEqual(client.page_entry_refresh(), "cooldown")
-        clock.advance(60)
-        self.assertEqual(client.page_entry_refresh(), "ok")
-
-        self.assertEqual(client.refresh(), "ok")
-        self.assertEqual(client.page_entry_refresh(), "cooldown")
-        self.assertFalse(client.should_auto_refresh())
-        clock.advance((6 * 60 * 60) - 1)
-        self.assertFalse(client.should_auto_refresh())
-        clock.advance(1)
-        self.assertTrue(client.should_auto_refresh())
-
-    def test_wigle_refresh_policy_and_basic_auth(self):
-        clock = Clock()
-        requests = FakeRequests(
-            {
-                "https://api.wigle.net/api/v2/profile/user": {"userid": "demo"},
-                "https://api.wigle.net/api/v2/stats/user": {
-                    "statistics": {
-                        "Rank": 100,
-                        "MonthRank": 11,
-                        "UserName": "demo",
-                        "DiscoveredWiFi": 50,
-                        "DiscoveredBt": 7,
-                        "DiscoveredCell": 3,
-                    }
-                },
-            }
-        )
-        client = WiGLEClient(
-            api_name="demo-name",
-            api_token="demo-value",
-            requests_module=requests,
-            clock=clock,
-        )
-
-        self.assertEqual(client.refresh(), "ok")
-        self.assertEqual(
-            requests.calls[0]["headers"]["Authorization"],
-            basic_auth_header("demo-name", "demo-value"),
-        )
-        self.assertFalse(client.should_auto_refresh())
-        clock.advance(6 * 60 * 60)
-        self.assertTrue(client.should_auto_refresh())
-
-    def test_wigle_runtime_username_falls_back_to_statistics_user_name(self):
-        normalized = normalize_wigle_runtime_data(
-            {"userid": ""},
-            {
-                "user": "",
-                "statistics": {
-                    "userName": "stats-user",
-                    "Rank": 100,
-                    "MonthRank": 11,
-                },
-            },
-        )
-        self.assertEqual(normalized["username"], "stats-user")
-
-    def test_wigle_stats_field_variants(self):
-        normalized = normalize_stats(
-            {
-                "statistics": {
-                    "rank": 1,
-                    "monthlyRank": 2,
-                    "username": "demo",
-                    "discoveredWiFi": 3,
-                    "discoveredBt": 4,
-                    "discoveredCell": 5,
-                }
-            }
-        )
-        self.assertEqual(normalized["global_rank"], 1)
-        self.assertEqual(normalized["monthly_rank"], 2)
-        self.assertEqual(normalized["wifi"], 3)
-        self.assertEqual(normalized["bluetooth"], 4)
-        self.assertEqual(normalized["cellular"], 5)
+        self.assertEqual(wdgwars.fetch("demo", None), ("OFFLINE", None))
 
     def test_wdgwars_offline_refresh_keeps_previous_data(self):
-        client = WDGWarsClient(
-            api_key="demo",
-            requests_module=FakeRequests(),
-            network_manager=OfflineNetwork(),
-        )
-        previous = {"me": {"username": "cached"}}
-        client.last_data = previous
-        self.assertEqual(client.refresh(), "cached")
-        self.assertIs(client.last_data, previous)
+        previous = {"username": "cached"}
+        wdgwars.requests = FakeRequests()
+        wdgwars.safe_net.connect = lambda: False
 
-        status, data = fetch_wdgwars("demo", previous, OfflineNetwork(), FakeRequests())
+        status, data = wdgwars.fetch("demo", previous)
+
         self.assertEqual(status, "CACHED")
         self.assertIs(data, previous)
+
+    def test_wigle_offline_without_previous_data_reports_offline(self):
+        wigle.requests = FakeRequests()
+        wigle.safe_net.connect = lambda: False
+
+        self.assertEqual(wigle.fetch("demo-name", "demo-value", None), ("OFFLINE", None))
 
     def test_wigle_offline_refresh_keeps_previous_data(self):
-        client = WiGLEClient(
-            api_name="demo-name",
-            api_token="demo-value",
-            requests_module=FakeRequests(),
-            network_manager=OfflineNetwork(),
-        )
-        previous = {"stats": {"username": "cached"}}
-        client.last_data = previous
-        self.assertEqual(client.refresh(), "cached")
-        self.assertIs(client.last_data, previous)
+        previous = {"username": "cached"}
+        wigle.requests = FakeRequests()
+        wigle.safe_net.connect = lambda: False
 
-        status, data = fetch_wigle("demo-name", "demo-value", previous, OfflineNetwork(), FakeRequests())
+        status, data = wigle.fetch("demo-name", "demo-value", previous)
+
         self.assertEqual(status, "CACHED")
         self.assertIs(data, previous)
-
-    def test_offline_without_previous_data_reports_offline(self):
-        self.assertEqual(
-            fetch_wdgwars("demo", None, OfflineNetwork(), FakeRequests()),
-            ("OFFLINE", None),
-        )
-        self.assertEqual(
-            fetch_wigle("demo-name", "demo-value", None, OfflineNetwork(), FakeRequests()),
-            ("OFFLINE", None),
-        )
 
     def test_request_oserror_preserves_previous_data(self):
         previous = {"username": "cached"}
-        self.assertEqual(
-            fetch_wdgwars("demo", previous, OnlineNetwork(), RaisingRequests()),
-            ("CACHED", previous),
-        )
-        self.assertEqual(
-            fetch_wigle("demo-name", "demo-value", previous, OnlineNetwork(), RaisingRequests()),
-            ("CACHED", previous),
-        )
+        wdgwars.requests = RaisingRequests()
+        wigle.requests = RaisingRequests()
 
-    def test_zip_compatible_wdgwars_fetch_preserves_runtime_shape(self):
-        requests = FakeRequests(
+        self.assertEqual(wdgwars.fetch("demo", previous), ("ERROR", previous))
+        self.assertEqual(wigle.fetch("demo-name", "demo-value", previous), ("ERROR", previous))
+
+    def test_wdgwars_live_parsing_remains_covered(self):
+        wdgwars.requests = FakeRequests(
             {
                 "https://wdgwars.pl/api/me": {
                     "ok": True,
@@ -264,13 +126,42 @@ class IntegrationTests(unittest.TestCase):
                 "https://wdgwars.pl/api/leaderboard": {},
             }
         )
-        status, data = fetch_wdgwars("demo", None, OnlineNetwork(), requests)
+
+        status, data = wdgwars.fetch("demo", None)
+
         self.assertEqual(status, "LIVE")
+        self.assertEqual(data["username"], "demo")
         self.assertEqual(data["rank_all"], 1)
         self.assertEqual(data["ble"], 2)
 
-    def test_zip_compatible_wigle_fetch_preserves_runtime_shape(self):
-        requests = FakeRequests(
+    def test_wdgwars_leaderboard_aliases_remain_covered(self):
+        wdgwars.requests = FakeRequests(
+            {
+                "https://wdgwars.pl/api/me": {
+                    "ok": True,
+                    "handle": "demo",
+                    "wifi_count": 10,
+                    "bluetooth_count": 2,
+                    "aircraft_count": 1,
+                },
+                "https://wdgwars.pl/api/leaderboard": {
+                    "today": [{"username": "demo", "position": 3}],
+                    "week": [{"username": "demo", "position": 2}],
+                    "allTime": [{"username": "demo", "position": 1}],
+                },
+            }
+        )
+
+        status, data = wdgwars.fetch("demo", None)
+
+        self.assertEqual(status, "LIVE")
+        self.assertEqual(data["rank_day"], 3)
+        self.assertEqual(data["rank_week"], 2)
+        self.assertEqual(data["rank_all"], 1)
+        self.assertEqual(data["wifi"], 10)
+
+    def test_wigle_live_parsing_remains_covered(self):
+        wigle.requests = FakeRequests(
             {
                 "https://api.wigle.net/api/v2/profile/user": {"userid": "demo"},
                 "https://api.wigle.net/api/v2/stats/user": {
@@ -284,11 +175,36 @@ class IntegrationTests(unittest.TestCase):
                 },
             }
         )
-        status, data = fetch_wigle("demo-name", "demo-value", None, OnlineNetwork(), requests)
+
+        status, data = wigle.fetch("demo-name", "demo-value", None)
+
         self.assertEqual(status, "LIVE")
+        self.assertEqual(data["username"], "demo")
         self.assertEqual(data["global_rank"], 100)
         self.assertEqual(data["month_rank"], 11)
         self.assertEqual(data["cell"], 3)
+
+    def test_wigle_username_falls_back_to_statistics_user_name(self):
+        wigle.requests = FakeRequests(
+            {
+                "https://api.wigle.net/api/v2/profile/user": {"userid": ""},
+                "https://api.wigle.net/api/v2/stats/user": {
+                    "statistics": {
+                        "userName": "stats-user",
+                        "rank": 100,
+                        "monthRank": 11,
+                    }
+                },
+            }
+        )
+
+        status, data = wigle.fetch("demo-name", "demo-value", None)
+
+        self.assertEqual(status, "LIVE")
+        self.assertEqual(data["username"], "stats-user")
+
+    def test_wigle_basic_auth_header(self):
+        self.assertEqual(wigle._basic_header("demo-name", "demo-token")[:6], "Basic ")
 
 
 if __name__ == "__main__":

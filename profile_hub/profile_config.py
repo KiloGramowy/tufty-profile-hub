@@ -36,8 +36,6 @@ INTEGRATIONS = {
     },
 }
 
-WIFI_NETWORKS = []
-
 NAME_LINE1 = PROFILE["name_line1"]
 NAME_LINE2 = PROFILE["name_line2"]
 JOB_TITLE = PROFILE["job_title"]

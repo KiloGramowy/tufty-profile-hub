@@ -42,6 +42,8 @@ class BuilderTests(unittest.TestCase):
                 ["main", "website", "youtube", "github", "wdgwars", "wigle"],
             )
             self.assertTrue((out_dir / "__init__.py").exists())
+            self.assertTrue((out_dir / "safe_wifi.py").exists())
+            self.assertFalse((out_dir / "network_manager.py").exists())
             self.assertTrue((out_dir / "profile_config.py").exists())
             self.assertTrue((out_dir / "generated_qr.py").exists())
 
@@ -120,15 +122,35 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(config["integrations"]["wigle"]["wigle_api_name"], "")
         self.assertEqual(config["integrations"]["wigle"]["wigle_api_token"], "")
 
-    def test_multi_wifi_parsing_and_empty_fallback(self):
+    def test_wifi_credentials_are_not_written_to_profile_config(self):
         profile, credentials = self.load_examples()
-        self.assertEqual(build_profile.normalize(profile, credentials)["wifi_networks"], [])
-        credentials["wifi_networks"] = [
-            {"ssid": "Home WiFi", "password": ""},
-            {"ssid": "", "password": ""},
-        ]
         config = build_profile.normalize(profile, credentials)
-        self.assertEqual(config["wifi_networks"], [{"ssid": "Home WiFi", "password": ""}])
+        rendered = build_profile.render_profile_config(config)
+
+        self.assertNotIn("WIFI_NETWORKS", rendered)
+        self.assertNotIn("WIFI_SSID", rendered)
+        self.assertNotIn("WIFI_PASSWORD", rendered)
+
+    def test_public_defaults_remain_six_hours_and_sixty_seconds(self):
+        profile, credentials = self.load_examples()
+        config = build_profile.normalize(profile, credentials)
+
+        self.assertEqual(
+            config["integrations"]["wdgwars"]["auto_refresh_seconds"],
+            6 * 60 * 60,
+        )
+        self.assertEqual(
+            config["integrations"]["wdgwars"]["page_entry_cooldown_seconds"],
+            60,
+        )
+        self.assertEqual(
+            config["integrations"]["wigle"]["auto_refresh_seconds"],
+            6 * 60 * 60,
+        )
+        self.assertEqual(
+            config["integrations"]["wigle"]["page_entry_cooldown_seconds"],
+            60,
+        )
 
     def test_runtime_sources_do_not_import_host_qr_dependencies(self):
         for path in (ROOT / "profile_hub").glob("*.py"):

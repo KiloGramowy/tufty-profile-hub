@@ -12,15 +12,22 @@ All notable changes to Tufty Profile Hub will be documented in this file.
 - Public Kilo demo preset with no private credentials.
 - First-class WDGWars and WiGLE integration modules with setup-safe blank credentials.
 - Badgeware-native renderer based on the proven Tufty project layout, including Mona Sans, XIAO C5 artwork, compact QR pages, and stats cards.
-- Six-hour automatic refresh policy while Profile Hub is running.
+- Six-hour refresh policy for active integration pages while Profile Hub is running.
 - Live integration refresh on page entry with a 60-second cooldown.
-- Automatic integration attempts are scheduled separately from successful sync time so offline failures do not create retry loops.
-- Automatic refresh due times stay in the same monotonic `badge.ticks` range, avoiding accidental immediate background refreshes on long-running devices.
 - Non-blocking Wi-Fi connection state machine preserves A/B/C responsiveness during WDGWars and WiGLE refreshes.
 - Generated Tufty QR data now contains only compact `QR_CODES`, not the unused full matrix payload.
-- Optional multi-WiFi support with standard `/secrets.py` fallback.
+- Standard Pimoroni `/secrets.py` Wi-Fi support through non-fatal `safe_wifi.py`.
 - Documentation for architecture, integrations, Wi-Fi, and Badgeware installation.
 - Local validation suite for syntax, JSON validation, builder checks, and unit tests.
+
+### Changed
+
+- Synced the Stage 1 runtime to the physically tested Tufty 2350 local build.
+- Restored the proven navigation, drawing, QR rendering, and page refresh flow.
+- Replaced the interim `NetworkManager` runtime path with the hardware-tested non-fatal `safe_wifi.py` helper.
+- Confirmed WDGWars LIVE, WiGLE LIVE, and OFFLINE behaviour on physical hardware.
+- Kept compact `QR_CODES` runtime data and removed the unused `QR_PAGES` output.
+- Documented the known short synchronous API pause that can occur after Wi-Fi is connected.
 
 ### Not Released
 

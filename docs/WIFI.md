@@ -1,72 +1,38 @@
 # Wi-Fi
 
-Tufty Profile Hub supports Pimoroni's standard single-network setup and an optional multi-WiFi profile for advanced users.
+Tufty Profile Hub uses the physically tested `profile_hub/safe_wifi.py` helper for runtime Wi-Fi.
 
-## Standard Fallback
+## Standard Setup
 
-If no Profile Hub multi-network config is available, the runtime can use the normal root `/secrets.py` values:
+Create the normal Pimoroni root `/secrets.py` file on the Tufty:
 
 ```python
 WIFI_SSID = "..."
 WIFI_PASSWORD = "..."
 ```
 
-This keeps compatibility with the standard Tufty workflow.
+The public builder does not write Wi-Fi credentials into `profile_config.py`. Generated app configuration contains profile text, links, QR data, and integration API credentials only.
 
-## Optional Multi-WiFi
+## Runtime Behaviour
 
-Private `credentials.json` may contain:
+`safe_wifi.py` starts a station connection and returns control to Badgeware instead of entering a blocking wait loop or invoking Pimoroni's fatal system Wi-Fi helper.
 
-```json
-{
-  "wifi_networks": [
-    {
-      "ssid": "Home WiFi",
-      "password": "..."
-    },
-    {
-      "ssid": "Phone Hotspot",
-      "password": "..."
-    }
-  ]
-}
-```
+The connection result is tri-state:
 
-The public `credentials.example.json` contains placeholders only.
+| Return | Meaning |
+| --- | --- |
+| `True` | connected |
+| `None` | connection is still in progress |
+| `False` | unavailable, failed, timed out, or missing credentials |
 
-## Selection Logic
-
-Profile Hub does not blindly try every saved network.
-
-Runtime behaviour:
-
-1. If Tufty is already connected, keep the current connection.
-2. If `wifi_networks` is configured, scan nearby Wi-Fi networks.
-3. Compare visible SSIDs with configured SSIDs.
-4. Connect only to a configured SSID that is currently visible.
-5. If several configured networks are visible, choose the strongest signal.
-6. Use configured order as a tie-breaker for equal signal strength.
-7. If no multi-WiFi network is configured, read `/secrets.py` and start that connection directly without requiring a visibility scan.
-8. If no suitable network is found, stay offline without crashing.
-
-This avoids long repeated connection attempts to unavailable networks and reduces the chance of tripping helper-level fatal Wi-Fi error states.
-
-Connection attempts are non-blocking. The first call starts `wlan.connect(...)` and returns control to Badgeware immediately; later update frames poll whether the connection is still connecting, connected, or offline. There is no sleep-based wait loop while connecting.
-
-Hidden SSIDs may not be selectable by the multi-WiFi scan-first logic because they may not appear in WLAN scan results. Stage 1 does not claim hidden SSID support. Standard `/secrets.py` fallback remains supported and does not require a scan when no multi-WiFi list is configured.
+Missing access points, wrong passwords, timeouts, and missing `/secrets.py` values are normal non-fatal conditions. A failed state has a bounded cooldown before another connection attempt is started.
 
 ## Offline Behaviour
 
-Network failure must not break normal badge navigation. Integration pages show `OFFLINE`, `CACHED`, or a setup message. If previously fetched in-memory data is available, the page keeps showing it with a cached/offline marker.
+WDGWars and WiGLE display `OFFLINE` when no previous data exists. If live data was fetched earlier in the same app session, failed refreshes keep that data visible and report `CACHED`.
 
-Profile Hub treats lost Wi-Fi as a normal runtime condition, not a Badgeware fatal error. A failed network attempt must return control to the app without a reset, launcher exit, grey system error screen, or modal OK prompt.
+The hardware-tested Stage 1 runtime does not show a fatal grey Wi-Fi screen, reset the device, or exit to the launcher when Wi-Fi is unavailable.
 
-## Power Behaviour
+## Known Limitation
 
-Stage 1 keeps Wi-Fi connected after a successful sync. This is more reliable for a small Badgeware app than repeatedly disconnecting and reconnecting around every refresh, especially because page-entry refreshes are part of the normal navigation flow.
-
-Future work may add a conservative disconnect option after real hardware testing confirms that it does not make refresh behaviour flaky.
-
-## Security
-
-Do not commit real Wi-Fi credentials. `credentials.json` and `dist/` are ignored because generated builds may contain SSIDs, passwords, and API credentials.
+After Wi-Fi is connected, WDGWars and WiGLE API calls are still synchronous. A short temporary UI pause can happen while the HTTP request completes, especially when entering WDGWars or WiGLE. This was observed and accepted during physical Tufty 2350 testing for Stage 1.

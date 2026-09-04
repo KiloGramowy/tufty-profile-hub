@@ -2,7 +2,7 @@
 
 Configurable multi-page personal profile badge for the Pimoroni Tufty 2350 with QR pages, WDGWars and WiGLE integrations.
 
-Tufty Profile Hub turns a working personal Badgeware app into a reusable open-source template. You edit small JSON files on your computer, run a builder, and copy the generated app folder to your Tufty 2350.
+Tufty Profile Hub turns a physically tested personal Badgeware app into a reusable open-source template. You edit small JSON files on your computer, run a builder, and copy the generated app folder to your Tufty 2350.
 
 ## ✨ Features
 
@@ -12,7 +12,7 @@ Tufty Profile Hub turns a working personal Badgeware app into a reusable open-so
 - A/B/C navigation: `A = BACK`, `B = NEXT`, `C = HOME`.
 - WDGWars integration with setup-safe blank credentials.
 - WiGLE.net integration with setup-safe blank credentials.
-- Optional multi-WiFi configuration with standard `/secrets.py` fallback.
+- Standard Pimoroni `/secrets.py` Wi-Fi with non-fatal offline handling.
 - Host-side QR generation, so Tufty does not need `qrcode` or Pillow.
 - 24x24 PNG launcher icon inspired by the XIAO ESP32-C5 board shape.
 
@@ -117,11 +117,13 @@ The screen keeps the compact reliable subset: username, global rank, monthly ran
 
 Profile Hub does not contact WDGWars or WiGLE automatically at app startup.
 
-Both integrations become eligible for one automatic refresh attempt every 6 hours while Profile Hub is actively running, regardless of which Profile Hub page is displayed. Entering the WDGWars or WiGLE page also attempts an immediate live refresh. A 60-second per-integration cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation, and any page-entry attempt resets that integration's next 6-hour automatic attempt.
+The active WDGWars or WiGLE page becomes eligible for refresh when that page is entered or when its configured 6-hour refresh interval has elapsed. A 60-second per-integration cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation.
 
 Profile Hub is a Badgeware app, not an operating-system daemon. It does not refresh while another Badgeware app is running, while the launcher is open, while the device is powered off, or while Profile Hub is not running.
 
-Loss of Wi-Fi is treated as a normal non-fatal condition. If live statistics were previously downloaded, Profile Hub keeps the cached in-memory values on screen and marks the integration as cached/offline.
+Loss of Wi-Fi is treated as a normal non-fatal condition. If live statistics were previously downloaded, Profile Hub keeps the cached in-memory values on screen and marks the integration as cached/offline. This OFFLINE/CACHED behaviour, WDGWars live data, WiGLE live data, QR navigation, and A/B/C responsiveness have been confirmed on a physical Pimoroni Tufty 2350.
+
+Stage 1 still performs the real API HTTP request synchronously after Wi-Fi is connected. A short temporary pause during a live WDGWars or WiGLE request is expected and documented; it is not a crash or fatal Wi-Fi error.
 
 ## 📶 Wi-Fi
 
@@ -132,18 +134,7 @@ WIFI_SSID = "..."
 WIFI_PASSWORD = "..."
 ```
 
-Advanced users may add multiple networks to private `credentials.json`:
-
-```json
-{
-  "wifi_networks": [
-    { "ssid": "Home WiFi", "password": "..." },
-    { "ssid": "Phone Hotspot", "password": "..." }
-  ]
-}
-```
-
-Profile Hub uses a non-blocking connection state machine, so Wi-Fi attempts do not lock A/B/C navigation. Multi-WiFi scans nearby networks once per new attempt and chooses the strongest configured visible SSID, with configured order used as a tie-breaker. Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results.
+Profile Hub uses `profile_hub/safe_wifi.py` for Wi-Fi. It starts connection attempts without invoking Pimoroni's fatal system Wi-Fi helper and returns `True`, `None`, or `False` for connected, connecting, or unavailable/failed states. Missing access points, wrong passwords, timeouts, and missing `/secrets.py` values stay inside the Profile Hub UI as normal OFFLINE/CACHED states.
 
 ## 🔐 Security
 
@@ -180,15 +171,14 @@ python -m unittest discover -s tests
 python build_profile.py --profile profile.example.json --credentials credentials.example.json
 ```
 
-Known real Tufty 2350 validation from the original implementation:
+Confirmed physical Tufty 2350 validation for this Stage 1 runtime baseline:
 
-- main profile UI
-- QR pages
-- QR scanning from the physical screen
-- WDGWars live integration
-- A/B/C navigation
-
-WiGLE hardware validation is still owner-side work. Multi-WiFi is new in this Stage 1 template and still needs real hardware testing.
+- BadgeWare launcher visibility and app launch
+- Main, Website, YouTube, GitHub, WDGWars, and WiGLE pages
+- Responsive A/B/C forward/back/home navigation, including QR pages
+- WDGWars and WiGLE OFFLINE behaviour with no Wi-Fi
+- WDGWars and WiGLE LIVE data after adding credentials
+- No fatal grey system Wi-Fi error and no forced reset
 
 ## 📚 Docs
 

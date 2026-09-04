@@ -38,11 +38,20 @@ badge.mode(HIRES | VSYNC)
 run(update)
 ```
 
-`__init__.py` owns the screen renderer, page navigation, scheduled refresh checks, and page-entry refresh triggers. It reads generated config and compact `QR_CODES` data at startup.
+`__init__.py` owns the screen renderer, page navigation, active-page refresh checks, and page-entry refresh triggers. It reads generated config and compact `QR_CODES` data at startup.
 
-The renderer keeps the proven Tufty visual proportions from the original project: Mona Sans vector text, the XIAO C5 board illustration, compact QR pages, and WDGWars/WiGLE stats cards.
+The renderer keeps the Tufty visual proportions from the physical hardware-tested build: Mona Sans vector text, the XIAO C5 board illustration, compact QR pages, and WDGWars/WiGLE stats cards.
 
-Network refresh is advanced as a non-blocking state machine. Page entry queues a refresh for a later update frame, and the Wi-Fi connection is then polled across frames so Badgeware can keep polling buttons.
+The runtime uses the proven Badgeware loop:
+
+```python
+refresh_current(now, entered)
+draw()
+```
+
+`safe_wifi.py` provides the non-fatal Wi-Fi state helper. WDGWars and WiGLE call it directly before making API requests. Wi-Fi startup returns control quickly as `CONNECTING`, while missing credentials, missing access points, wrong passwords, and timeouts become `OFFLINE` or `CACHED` inside the normal UI.
+
+Real WDGWars/WiGLE HTTP requests are synchronous after Wi-Fi is connected. The short temporary pause observed during those API calls is an accepted Stage 1 hardware-tested limitation, not a fatal error.
 
 ## App Paths
 

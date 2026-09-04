@@ -17,7 +17,7 @@ APP_NAME = "profile_hub"
 APP_FILES = (
     "__init__.py",
     "icon.png",
-    "network_manager.py",
+    "safe_wifi.py",
     "wdgwars.py",
     "wigle.py",
     "README.md",
@@ -123,27 +123,6 @@ def _normalize_links(profile: dict[str, Any]) -> list[dict[str, str]]:
                 "accent": accent,
             }
         )
-    return normalized
-
-
-def _normalize_wifi_networks(credentials: dict[str, Any]) -> list[dict[str, str]]:
-    networks = credentials.get("wifi_networks", [])
-    if networks is None:
-        return []
-    if not isinstance(networks, list):
-        raise ConfigError("credentials field 'wifi_networks' must be a list")
-
-    normalized: list[dict[str, str]] = []
-    for index, raw in enumerate(networks):
-        if not isinstance(raw, dict):
-            raise ConfigError(f"wifi_networks[{index}] must be an object")
-        ssid = _optional_string(raw, "ssid")
-        password = _optional_string(raw, "password")
-        if not ssid and not password:
-            continue
-        if not ssid:
-            raise ConfigError(f"wifi_networks[{index}].ssid must not be blank")
-        normalized.append({"ssid": ssid, "password": password})
     return normalized
 
 
@@ -254,7 +233,6 @@ def normalize(profile: dict[str, Any], credentials: dict[str, Any]) -> dict[str,
         "links": links,
         "pages": pages,
         "integrations": integrations,
-        "wifi_networks": _normalize_wifi_networks(credentials),
     }
 
 
@@ -332,8 +310,7 @@ def render_profile_config(config: dict[str, Any]) -> str:
         f"INPUT_DELAY_MS = {DEFAULT_INPUT_DELAY_MS}\n\n"
         f"PROFILE = {_python_literal(config['profile'])}\n\n"
         f"PAGES = {_python_literal(config['pages'])}\n\n"
-        f"INTEGRATIONS = {_python_literal(config['integrations'])}\n\n"
-        f"WIFI_NETWORKS = {_python_literal(config['wifi_networks'])}\n"
+        f"INTEGRATIONS = {_python_literal(config['integrations'])}\n"
     )
 
 

@@ -9,7 +9,7 @@ Files committed here are public templates. The generated files in `dist/profile_
 - `__init__.py` - Badgeware app and screen renderer.
 - `profile_config.py` - public placeholder, replaced during build.
 - `generated_qr.py` - public placeholder, replaced during build.
-- `network_manager.py` - optional multi-WiFi selection and `/secrets.py` fallback.
+- `safe_wifi.py` - non-fatal `/secrets.py` Wi-Fi state helper.
 - `wdgwars.py` - WDGWars client and parser.
 - `wigle.py` - WiGLE client and parser.
 - `icon.png` - 24x24 launcher icon.

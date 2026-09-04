@@ -12,19 +12,21 @@ Defaults:
 | Page-entry live refresh | enabled |
 | Per-integration cooldown | 60 seconds |
 
-Profile Hub does not contact WDGWars or WiGLE automatically at app startup. Each integration's first automatic refresh attempt becomes due 6 hours after the app starts.
+Profile Hub does not contact WDGWars or WiGLE automatically at app startup because the first page is `main`.
 
-While Profile Hub remains running, WDGWars and WiGLE are each eligible for at most one automatic refresh attempt every 6 hours. That background check is independent of the currently displayed Profile Hub page.
+While Profile Hub remains running, the active WDGWars or WiGLE page is eligible for a refresh when that page is entered or when its configured refresh interval has elapsed. The public default interval is 6 hours.
 
-When the user enters an integration page, the app attempts a live refresh immediately unless that integration was attempted within the last 60 seconds. Any actual automatic or page-entry attempt, successful or failed, schedules that integration's next automatic attempt for 6 hours later. This prevents a continuous automatic retry loop while still allowing an explicit page-entry retry after the 60-second cooldown.
+When the user enters an integration page, the app attempts a live refresh immediately unless that integration was attempted within the last 60 seconds. This cooldown is configured per integration and defaults to 60 seconds.
 
 The automatic timer only runs while Profile Hub itself is running. Badgeware apps are not permanent background daemons, so no refresh happens while another app is open, while Tufty is in the launcher, while Profile Hub is closed, or while the device is powered off.
 
-Page-entry refresh is queued so the destination page can be drawn before any Wi-Fi/API work starts. If Wi-Fi is still connecting, the same pending refresh continues across later update frames without starting a new attempt or blocking A/B/C navigation.
+The restored Stage 1 runtime uses the physically tested Badgeware flow: button handling runs first, then the active page refresh check runs, then the page is redrawn. Wi-Fi startup is non-fatal and returns `CONNECTING` without a fatal system dialog. Real API HTTP requests are synchronous after Wi-Fi is live, so a short temporary pause during WDGWars or WiGLE refresh is expected.
 
 If a refresh fails, the page keeps previously fetched in-memory data visible where available and marks the status as `CACHED`; without previous data, it marks the status as `OFFLINE`.
 
 Loss of Wi-Fi is treated as a normal non-fatal condition. Profile Hub must not show a Badgeware fatal error, reset the device, or exit to the launcher because a network is unavailable. If cached WDGWars or WiGLE values exist, the normal cards remain visible and the small status indicator changes to `CACHED`. If no previous values exist, the page stays inside the normal Profile Hub UI and shows `OFFLINE`.
+
+WDGWars LIVE, WiGLE LIVE, OFFLINE behaviour, and A/B/C navigation were confirmed on a physical Pimoroni Tufty 2350 for this Stage 1 baseline.
 
 ## WDGWars
 
