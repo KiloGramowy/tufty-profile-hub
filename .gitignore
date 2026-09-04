@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.venv/
+venv/
+
+profile.json
+credentials.json
+dist/
+
+.DS_Store
+Thumbs.db

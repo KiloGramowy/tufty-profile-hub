@@ -1,0 +1,186 @@
+"""WiGLE.net API client and normalization for Profile Hub."""
+
+try:
+    import time
+except ImportError:  # pragma: no cover
+    time = None
+
+try:
+    import ubinascii as binascii
+except ImportError:  # pragma: no cover
+    import base64
+    binascii = None
+
+try:
+    import urequests as _requests
+except ImportError:  # pragma: no cover - host tests inject a fake module.
+    _requests = None
+
+
+PROFILE_ENDPOINT = "https://api.wigle.net/api/v2/profile/user"
+STATS_ENDPOINT = "https://api.wigle.net/api/v2/stats/user"
+DEFAULT_AUTO_REFRESH_SECONDS = 6 * 60 * 60
+DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS = 60
+
+
+def now_seconds():
+    if time and hasattr(time, "time"):
+        return int(time.time())
+    if time and hasattr(time, "ticks_ms"):
+        return int(time.ticks_ms() / 1000)
+    return 0
+
+
+def _get(data, names, default=None):
+    if not isinstance(data, dict):
+        return default
+    for name in names:
+        if name in data and data[name] not in (None, ""):
+            return data[name]
+    return default
+
+
+def _first_dict(*items):
+    for item in items:
+        if isinstance(item, dict):
+            return item
+    return {}
+
+
+def basic_auth_header(api_name, api_token):
+    raw = ("%s:%s" % (api_name, api_token)).encode("utf-8")
+    if binascii is not None:
+        encoded = binascii.b2a_base64(raw).strip().decode("ascii")
+    else:
+        encoded = base64.b64encode(raw).decode("ascii")
+    return "Basic " + encoded
+
+
+def normalize_profile(payload):
+    source = _first_dict(payload.get("profile") if isinstance(payload, dict) else None, payload)
+    return {
+        "username": _get(source, ("userid", "userId", "username", "user", "name"), ""),
+        "joined": _get(source, ("joindate", "joinDate", "joined"), ""),
+        "donate": _get(source, ("donate", "patron", "supporter"), ""),
+    }
+
+
+def normalize_stats(payload):
+    if not isinstance(payload, dict):
+        payload = {}
+    stats = _first_dict(payload.get("statistics"), payload.get("stats"), payload)
+    return {
+        "username": _get(stats, ("User", "user", "UserName", "userName", "username"), ""),
+        "global_rank": _get(stats, ("Rank", "rank", "globalRank", "global_rank"), None),
+        "monthly_rank": _get(stats, ("MonthRank", "monthRank", "monthlyRank", "monthly_rank"), None),
+        "wifi": _get(stats, ("DiscoveredWiFi", "discoveredWiFi", "wifi", "wifi_count"), None),
+        "bluetooth": _get(stats, ("DiscoveredBt", "discoveredBt", "bluetooth", "bt"), None),
+        "cellular": _get(stats, ("DiscoveredCell", "discoveredCell", "cellular", "cell"), None),
+    }
+
+
+class WiGLEClient:
+    def __init__(
+        self,
+        api_name="",
+        api_token="",
+        auto_refresh_seconds=DEFAULT_AUTO_REFRESH_SECONDS,
+        cooldown_seconds=DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS,
+        requests_module=None,
+        clock=None,
+        network_manager=None,
+    ):
+        self.api_name = (api_name or "").strip()
+        self.api_token = (api_token or "").strip()
+        self.auto_refresh_seconds = int(auto_refresh_seconds)
+        self.cooldown_seconds = int(cooldown_seconds)
+        self.requests = requests_module if requests_module is not None else _requests
+        self.clock = clock or now_seconds
+        self.network_manager = network_manager
+        self.last_refresh_at = None
+        self.last_page_entry_refresh_at = None
+        self.last_data = None
+        self.last_status = "setup-required" if not self.credentials_ready() else "idle"
+        self.last_error = ""
+
+    def credentials_ready(self):
+        return bool(self.api_name and self.api_token)
+
+    def should_auto_refresh(self):
+        if not self.credentials_ready():
+            return False
+        if self.last_refresh_at is None:
+            return True
+        return self.clock() - self.last_refresh_at >= self.auto_refresh_seconds
+
+    def should_page_entry_refresh(self):
+        if not self.credentials_ready():
+            return False
+        now = self.clock()
+        if self.last_refresh_at is not None and now - self.last_refresh_at < self.cooldown_seconds:
+            return False
+        if self.last_page_entry_refresh_at is None:
+            return True
+        return now - self.last_page_entry_refresh_at >= self.cooldown_seconds
+
+    def scheduled_refresh(self):
+        if not self.should_auto_refresh():
+            return self.last_status
+        return self.refresh("scheduled")
+
+    def page_entry_refresh(self):
+        if not self.credentials_ready():
+            self.last_status = "setup-required"
+            return self.last_status
+        if not self.should_page_entry_refresh():
+            self.last_status = "cooldown"
+            return self.last_status
+        self.last_page_entry_refresh_at = self.clock()
+        return self.refresh("page-entry")
+
+    def refresh(self, reason="manual"):
+        if not self.credentials_ready():
+            self.last_status = "setup-required"
+            return self.last_status
+        if self.requests is None:
+            self.last_status = "offline"
+            return self.last_status
+        if self.network_manager and not self.network_manager.ensure_connected():
+            self.last_status = "offline"
+            return self.last_status
+
+        headers = {"Authorization": basic_auth_header(self.api_name, self.api_token)}
+        try:
+            profile = self._get_json(PROFILE_ENDPOINT, headers)
+            stats = self._get_json(STATS_ENDPOINT, headers)
+        except Exception as exc:
+            self.last_status = "error"
+            self.last_error = str(exc)
+            return self.last_status
+
+        normalized_profile = normalize_profile(profile)
+        normalized_stats = normalize_stats(stats)
+        if not normalized_stats["username"]:
+            normalized_stats["username"] = normalized_profile["username"]
+
+        self.last_data = {
+            "profile": normalized_profile,
+            "stats": normalized_stats,
+            "reason": reason,
+        }
+        self.last_refresh_at = self.clock()
+        self.last_status = "ok"
+        self.last_error = ""
+        return self.last_status
+
+    def _get_json(self, url, headers):
+        try:
+            response = self.requests.get(url, headers=headers, timeout=10)
+        except TypeError:
+            response = self.requests.get(url, headers=headers)
+        try:
+            return response.json()
+        finally:
+            close = getattr(response, "close", None)
+            if close:
+                close()

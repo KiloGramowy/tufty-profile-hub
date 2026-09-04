@@ -1,0 +1,48 @@
+{
+  "name_line1": "Your",
+  "name_line2": "Name",
+  "job_title": "Wireless Intelligence Engineer",
+  "primary_label": "example.com",
+  "tagline": "XIAO C5 // RF // CYBER",
+  "links": [
+    {
+      "id": "website",
+      "title": "WEBSITE",
+      "label": "example.com",
+      "url": "https://example.com",
+      "accent": "cyan"
+    },
+    {
+      "id": "youtube",
+      "title": "YOUTUBE",
+      "label": "YourChannel",
+      "url": "https://youtube.com/",
+      "accent": "red"
+    },
+    {
+      "id": "github",
+      "title": "GITHUB",
+      "label": "YourHandle",
+      "url": "https://github.com/",
+      "accent": "orange"
+    }
+  ],
+  "wdgwars": {
+    "enabled": true,
+    "auto_refresh_hours": 6,
+    "page_entry_cooldown_seconds": 60
+  },
+  "wigle": {
+    "enabled": true,
+    "auto_refresh_hours": 6,
+    "page_entry_cooldown_seconds": 60
+  },
+  "page_order": [
+    "main",
+    "website",
+    "youtube",
+    "github",
+    "wdgwars",
+    "wigle"
+  ]
+}

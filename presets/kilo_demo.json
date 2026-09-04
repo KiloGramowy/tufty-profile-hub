@@ -1,0 +1,48 @@
+{
+  "name_line1": "Kilo",
+  "name_line2": "KiloGramowy",
+  "job_title": "Wireless Intelligence Engineer",
+  "primary_label": "kilogramowy.pl",
+  "tagline": "XIAO C5 // RF // CYBER",
+  "links": [
+    {
+      "id": "website",
+      "title": "WEBSITE",
+      "label": "kilogramowy.pl",
+      "url": "https://kilogramowy.pl",
+      "accent": "cyan"
+    },
+    {
+      "id": "youtube",
+      "title": "YOUTUBE",
+      "label": "KiloGramowy",
+      "url": "https://www.youtube.com/channel/UCWXxlG-M9WZ_XPHXgDwDBiA",
+      "accent": "red"
+    },
+    {
+      "id": "github",
+      "title": "GITHUB",
+      "label": "KiloGramowy",
+      "url": "https://github.com/KiloGramowy",
+      "accent": "orange"
+    }
+  ],
+  "wdgwars": {
+    "enabled": true,
+    "auto_refresh_hours": 6,
+    "page_entry_cooldown_seconds": 60
+  },
+  "wigle": {
+    "enabled": true,
+    "auto_refresh_hours": 6,
+    "page_entry_cooldown_seconds": 60
+  },
+  "page_order": [
+    "main",
+    "website",
+    "youtube",
+    "github",
+    "wdgwars",
+    "wigle"
+  ]
+}
