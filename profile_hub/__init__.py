@@ -124,12 +124,14 @@ wdg_status = "IDLE"
 wdg_last_success = None
 wdg_last_attempt = None
 wdg_next_auto = None
+wdg_refresh_pending = None
 
 wigle_data = None
 wigle_status = "IDLE"
 wigle_last_success = None
 wigle_last_attempt = None
 wigle_next_auto = None
+wigle_refresh_pending = None
 
 
 def ticks_elapsed(now, previous):
@@ -509,70 +511,109 @@ def draw_wigle():
     footer()
 
 
-def refresh_wdgwars(now):
+def refresh_wdgwars(now, continuing=False):
     global wdg_data, wdg_status, wdg_last_success, wdg_last_attempt, wdg_next_auto
 
     if not cfg.WDGWARS_ENABLED:
-        return
-    if not attempt_ready(now, wdg_last_attempt, cfg.WDGWARS_PAGE_ENTRY_COOLDOWN_MS):
-        return
+        return "SKIP"
+    if not continuing:
+        if not attempt_ready(now, wdg_last_attempt, cfg.WDGWARS_PAGE_ENTRY_COOLDOWN_MS):
+            return "COOLDOWN"
+        wdg_last_attempt = now
+        wdg_next_auto = ticks_add(now, cfg.WDGWARS_REFRESH_MS)
 
-    wdg_last_attempt = now
-    wdg_next_auto = ticks_add(now, cfg.WDGWARS_REFRESH_MS)
     try:
         status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
     except OSError:
         wdg_status = offline_status(wdg_data)
-        return
+        return wdg_status
     if status == "OFFLINE" and wdg_data is not None:
         status = "CACHED"
     wdg_status = status
     if status == "LIVE" and data is not None:
         wdg_data = data
         wdg_last_success = now
+    return status
 
 
-def refresh_wigle(now):
+def refresh_wigle(now, continuing=False):
     global wigle_data, wigle_status, wigle_last_success, wigle_last_attempt, wigle_next_auto
 
     if not cfg.WIGLE_ENABLED:
-        return
-    if not attempt_ready(now, wigle_last_attempt, cfg.WIGLE_PAGE_ENTRY_COOLDOWN_MS):
-        return
+        return "SKIP"
+    if not continuing:
+        if not attempt_ready(now, wigle_last_attempt, cfg.WIGLE_PAGE_ENTRY_COOLDOWN_MS):
+            return "COOLDOWN"
+        wigle_last_attempt = now
+        wigle_next_auto = ticks_add(now, cfg.WIGLE_REFRESH_MS)
 
-    wigle_last_attempt = now
-    wigle_next_auto = ticks_add(now, cfg.WIGLE_REFRESH_MS)
     try:
         status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
     except OSError:
         wigle_status = offline_status(wigle_data)
-        return
+        return wigle_status
     if status == "OFFLINE" and wigle_data is not None:
         status = "CACHED"
     wigle_status = status
     if status == "LIVE" and data is not None:
         wigle_data = data
         wigle_last_success = now
+    return status
+
+
+def queue_page_refresh(page_id):
+    global wdg_refresh_pending, wigle_refresh_pending
+
+    if page_id == "wdgwars":
+        wdg_refresh_pending = "queued"
+    elif page_id == "wigle":
+        wigle_refresh_pending = "queued"
 
 
 def refresh_page_entry(now, page_id):
     if page_id == "wdgwars":
-        refresh_wdgwars(now)
+        return refresh_wdgwars(now)
     elif page_id == "wigle":
-        refresh_wigle(now)
+        return refresh_wigle(now)
+    return "SKIP"
+
+
+def continue_pending_refreshes(now):
+    global wdg_refresh_pending, wigle_refresh_pending
+
+    if wdg_refresh_pending:
+        status = refresh_wdgwars(now, continuing=(wdg_refresh_pending == "connecting"))
+        if status != "CONNECTING":
+            wdg_refresh_pending = None
+        else:
+            wdg_refresh_pending = "connecting"
+    if wigle_refresh_pending:
+        status = refresh_wigle(now, continuing=(wigle_refresh_pending == "connecting"))
+        if status != "CONNECTING":
+            wigle_refresh_pending = None
+        else:
+            wigle_refresh_pending = "connecting"
 
 
 def refresh_background(now):
-    if cfg.WDGWARS_ENABLED and ticks_elapsed(now, wdg_next_auto) >= 0:
-        refresh_wdgwars(now)
-    if cfg.WIGLE_ENABLED and ticks_elapsed(now, wigle_next_auto) >= 0:
-        refresh_wigle(now)
+    global wdg_refresh_pending, wigle_refresh_pending
+
+    if not wdg_refresh_pending and cfg.WDGWARS_ENABLED and ticks_elapsed(now, wdg_next_auto) >= 0:
+        status = refresh_wdgwars(now)
+        if status == "CONNECTING":
+            wdg_refresh_pending = "connecting"
+    if not wigle_refresh_pending and cfg.WIGLE_ENABLED and ticks_elapsed(now, wigle_next_auto) >= 0:
+        status = refresh_wigle(now)
+        if status == "CONNECTING":
+            wigle_refresh_pending = "connecting"
 
 
 def refresh_current(now, entered=False):
     current = PAGES[page_index]
     if entered:
-        refresh_page_entry(now, current)
+        queue_page_refresh(current)
+        return
+    continue_pending_refreshes(now)
     refresh_background(now)
 
 

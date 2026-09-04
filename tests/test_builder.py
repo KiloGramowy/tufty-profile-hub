@@ -51,14 +51,11 @@ class BuilderTests(unittest.TestCase):
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
 
-            website = module.QR_PAGES["website"]
-            self.assertEqual(website["url"], "https://example.com")
-            self.assertGreater(len(website["matrix"]), 20)
-            self.assertEqual(website["matrix"], build_profile.make_qr_matrix("https://example.com"))
             self.assertIn("website", module.QR_CODES)
             n, rows = module.QR_CODES["website"]
             self.assertEqual(n, len(rows))
             self.assertEqual((n, rows), build_profile.make_qr_rows("https://example.com"))
+            self.assertFalse(hasattr(module, "QR_PAGES"))
 
             config_spec = importlib.util.spec_from_file_location(
                 "profile_config_test", out_dir / "profile_config.py"

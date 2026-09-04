@@ -87,7 +87,7 @@ QR generation happens on the host computer:
 URL -> build_profile.py -> generated_qr.py -> Tufty QR renderer
 ```
 
-Badgeware does not need the CPython `qrcode` or Pillow packages.
+Badgeware does not need the CPython `qrcode` or Pillow packages. Generated Tufty builds keep only compact `QR_CODES` data.
 
 ## 📡 WDGWars
 
@@ -143,7 +143,7 @@ Advanced users may add multiple networks to private `credentials.json`:
 }
 ```
 
-Profile Hub scans nearby networks and connects only to a configured SSID that is currently visible. If multiple configured networks are visible, it chooses the strongest signal, with configured order used as a tie-breaker. Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results.
+Profile Hub uses a non-blocking connection state machine, so Wi-Fi attempts do not lock A/B/C navigation. Multi-WiFi scans nearby networks once per new attempt and chooses the strongest configured visible SSID, with configured order used as a tie-breaker. Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results.
 
 ## 🔐 Security
 

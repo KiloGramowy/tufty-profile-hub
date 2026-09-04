@@ -43,6 +43,26 @@ class RaisingFetcher:
         raise OSError("network down")
 
 
+class ConnectingThenLiveFetcher:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args):
+        self.calls.append(args)
+        if len(self.calls) == 1:
+            return "CONNECTING", args[1]
+        return "LIVE", {"username": "fresh"}
+
+
+class FakeBadge:
+    def __init__(self, ticks, pressed=()):
+        self.ticks = ticks
+        self._pressed = set(pressed)
+
+    def pressed(self, button):
+        return button in self._pressed
+
+
 class RuntimeRefreshTests(unittest.TestCase):
     def setUp(self):
         self.wdg_fetch = Fetcher("wdg")
@@ -73,11 +93,19 @@ class RuntimeRefreshTests(unittest.TestCase):
         runtime.wdg_last_success = None
         runtime.wdg_last_attempt = None
         runtime.wdg_next_auto = runtime.ticks_add(start, SIX_HOURS_MS)
+        runtime.wdg_refresh_pending = None
         runtime.wigle_data = None
         runtime.wigle_status = "IDLE"
         runtime.wigle_last_success = None
         runtime.wigle_last_attempt = None
         runtime.wigle_next_auto = runtime.ticks_add(start, SIX_HOURS_MS)
+        runtime.wigle_refresh_pending = None
+        runtime.BUTTON_A = "A"
+        runtime.BUTTON_B = "B"
+        runtime.BUTTON_C = "C"
+
+    def set_badge(self, ticks, pressed=()):
+        runtime.badge = FakeBadge(ticks, pressed)
 
     def test_no_background_api_calls_at_app_start(self):
         runtime.refresh_background(0)
@@ -119,6 +147,52 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         runtime.refresh_background(page_entry_at + SIX_HOURS_MS)
         self.assertEqual(len(self.wdg_fetch.calls), 2)
+
+    def test_entering_wdgwars_queues_refresh_after_destination_draw(self):
+        drawn = []
+        runtime.draw = lambda: drawn.append(runtime.PAGES[runtime.page_index])
+        runtime.PAGES = ["main", "website", "wdgwars", "wigle"]
+        runtime.page_index = 1
+        runtime.last_page_id = "website"
+        self.set_badge(1000, ("B",))
+
+        runtime.update()
+
+        self.assertEqual(runtime.page_index, 2)
+        self.assertEqual(drawn, ["wdgwars"])
+        self.assertEqual(self.wdg_fetch.calls, [])
+        self.assertEqual(runtime.wdg_refresh_pending, "queued")
+
+    def test_navigation_wins_while_refresh_is_pending(self):
+        drawn = []
+        runtime.draw = lambda: drawn.append(runtime.PAGES[runtime.page_index])
+        runtime.PAGES = ["main", "website", "wdgwars", "wigle"]
+        runtime.page_index = 2
+        runtime.last_page_id = "wdgwars"
+        runtime.wdg_refresh_pending = "connecting"
+        self.set_badge(1000, ("A",))
+
+        runtime.update()
+
+        self.assertEqual(runtime.page_index, 1)
+        self.assertEqual(drawn, ["website"])
+        self.assertEqual(self.wdg_fetch.calls, [])
+
+    def test_connecting_continuation_bypasses_new_attempt_cooldown(self):
+        fetcher = ConnectingThenLiveFetcher()
+        runtime.wdgwars.fetch = fetcher
+        runtime.wdg_refresh_pending = "queued"
+
+        runtime.refresh_current(1000, entered=False)
+        self.assertEqual(runtime.wdg_status, "CONNECTING")
+        self.assertEqual(runtime.wdg_refresh_pending, "connecting")
+        self.assertEqual(runtime.wdg_last_attempt, 1000)
+
+        runtime.refresh_current(1001, entered=False)
+        self.assertEqual(len(fetcher.calls), 2)
+        self.assertIsNone(runtime.wdg_refresh_pending)
+        self.assertEqual(runtime.wdg_status, "LIVE")
+        self.assertEqual(runtime.wdg_data, {"username": "fresh"})
 
     def test_failed_auto_refresh_does_not_retry_after_sixty_seconds(self):
         runtime.wdgwars.fetch = OfflineFetcher()

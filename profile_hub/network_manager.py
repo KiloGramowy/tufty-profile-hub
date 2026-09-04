@@ -10,6 +10,16 @@ except ImportError:  # pragma: no cover - MicroPython always has time here.
     time = None
 
 
+CONNECTED = True
+CONNECTING = None
+OFFLINE = False
+
+STATE_IDLE = "IDLE"
+STATE_CONNECTING = "CONNECTING"
+STATE_CONNECTED = "CONNECTED"
+STATE_FAILED = "FAILED"
+
+
 def _decode_ssid(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", "ignore")
@@ -73,6 +83,7 @@ class NetworkManager:
         wlan=None,
         network_module=None,
         secrets_loader=None,
+        ticks_ms=None,
     ):
         self.wifi_networks = wifi_networks or []
         self.connect_timeout_ms = connect_timeout_ms
@@ -80,9 +91,15 @@ class NetworkManager:
         self.wlan = wlan
         self.network_module = network_module
         self.secrets_loader = secrets_loader or load_standard_secrets
+        self._ticks_ms_override = ticks_ms
         self.last_error = None
+        self.state = STATE_IDLE
+        self.current_network = None
+        self.connect_started_at = None
 
     def _ticks_ms(self):
+        if self._ticks_ms_override is not None:
+            return self._ticks_ms_override()
         if time and hasattr(time, "ticks_ms"):
             return time.ticks_ms()
         if time and hasattr(time, "time"):
@@ -137,49 +154,73 @@ class NetworkManager:
 
     def ensure_connected(self):
         if self.is_connected():
-            return True
+            self.state = STATE_CONNECTED
+            return CONNECTED
 
-        scan_results = self.scan()
-        selected = select_configured_network(scan_results, self.wifi_networks)
-        if selected:
-            return self._connect_one(selected)
+        if self.state == STATE_CONNECTING:
+            return self._poll_connection()
 
-        if not self.fallback_to_secrets:
-            return False
+        return self._start_connection()
 
-        try:
-            fallback = self.secrets_loader()
-        except Exception as exc:
-            self.last_error = exc
-            return False
-        if not fallback:
-            return False
-        if fallback.get("ssid") not in visible_ssids(scan_results):
-            return False
-        return self._connect_one(fallback)
+    def _start_connection(self):
+        selected = None
+        scan_results = []
+
+        if self.wifi_networks:
+            scan_results = self.scan()
+            selected = select_configured_network(scan_results, self.wifi_networks)
+
+        if selected is None:
+            if not self.fallback_to_secrets:
+                self.state = STATE_FAILED
+                return OFFLINE
+
+            try:
+                fallback = self.secrets_loader()
+            except Exception as exc:
+                self.last_error = exc
+                self.state = STATE_FAILED
+                return OFFLINE
+            if not fallback:
+                self.state = STATE_FAILED
+                return OFFLINE
+
+            if self.wifi_networks and fallback.get("ssid") not in visible_ssids(scan_results):
+                self.state = STATE_FAILED
+                return OFFLINE
+            selected = fallback
+
+        return self._connect_one(selected)
 
     def _connect_one(self, config):
         wlan = self._wlan()
         if wlan is None:
-            return False
+            self.state = STATE_FAILED
+            return OFFLINE
         try:
             wlan.active(True)
             wlan.connect(config.get("ssid"), config.get("password", ""))
         except Exception as exc:
             self.last_error = exc
-            return False
+            self.state = STATE_FAILED
+            return OFFLINE
 
-        start = self._ticks_ms()
-        while self._ticks_diff(self._ticks_ms(), start) < self.connect_timeout_ms:
-            if self.is_connected():
-                return True
-            if time and hasattr(time, "sleep_ms"):
-                time.sleep_ms(100)
-            elif time:
-                time.sleep(0.1)
-            else:
-                break
-        return self.is_connected()
+        self.current_network = config
+        self.connect_started_at = self._ticks_ms()
+        self.state = STATE_CONNECTING
+        return CONNECTING
+
+    def _poll_connection(self):
+        if self.is_connected():
+            self.state = STATE_CONNECTED
+            return CONNECTED
+        if self.connect_started_at is None:
+            self.state = STATE_FAILED
+            return OFFLINE
+        if self._ticks_diff(self._ticks_ms(), self.connect_started_at) >= self.connect_timeout_ms:
+            self.state = STATE_FAILED
+            return OFFLINE
+        return CONNECTING
 
 
 def load_standard_secrets():

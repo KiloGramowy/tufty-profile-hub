@@ -179,7 +179,10 @@ def fetch(api_key, previous=None, network_manager=None, requests_module=None):
         return offline_status(previous), previous
     if network_manager is not None:
         try:
-            if not network_manager.ensure_connected():
+            connection = network_manager.ensure_connected()
+            if connection is None:
+                return "CONNECTING", previous
+            if not connection:
                 return offline_status(previous), previous
         except OSError:
             return offline_status(previous), previous
@@ -266,7 +269,11 @@ class WDGWarsClient:
             return self.last_status
         if self.network_manager:
             try:
-                if not self.network_manager.ensure_connected():
+                connection = self.network_manager.ensure_connected()
+                if connection is None:
+                    self.last_status = "connecting"
+                    return self.last_status
+                if not connection:
                     self.last_status = "cached" if self.last_data is not None else "offline"
                     return self.last_status
             except OSError as exc:

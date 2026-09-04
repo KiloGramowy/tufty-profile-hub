@@ -43,6 +43,11 @@ class OfflineNetwork:
         return False
 
 
+class ConnectingNetwork:
+    def ensure_connected(self):
+        return None
+
+
 class OnlineNetwork:
     def __init__(self):
         self.calls = 0
@@ -83,6 +88,15 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(client.refresh(), "setup-required")
         self.assertEqual(requests.calls, [])
         self.assertEqual(fetch_wigle("", "", None, OnlineNetwork(), requests), ("NO KEY", None))
+        self.assertEqual(requests.calls, [])
+
+    def test_connecting_network_defers_authenticated_requests(self):
+        requests = FakeRequests()
+        self.assertEqual(fetch_wdgwars("demo", None, ConnectingNetwork(), requests), ("CONNECTING", None))
+        self.assertEqual(
+            fetch_wigle("demo-name", "demo-value", None, ConnectingNetwork(), requests),
+            ("CONNECTING", None),
+        )
         self.assertEqual(requests.calls, [])
 
     def test_wdgwars_refresh_policy_and_cooldown(self):

@@ -46,12 +46,14 @@ Runtime behaviour:
 4. Connect only to a configured SSID that is currently visible.
 5. If several configured networks are visible, choose the strongest signal.
 6. Use configured order as a tie-breaker for equal signal strength.
-7. If no multi-WiFi network is visible, optionally fall back to `/secrets.py` if that SSID is visible.
+7. If no multi-WiFi network is configured, read `/secrets.py` and start that connection directly without requiring a visibility scan.
 8. If no suitable network is found, stay offline without crashing.
 
 This avoids long repeated connection attempts to unavailable networks and reduces the chance of tripping helper-level fatal Wi-Fi error states.
 
-Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results. Stage 1 does not claim hidden SSID support. Standard visible `/secrets.py` fallback remains supported.
+Connection attempts are non-blocking. The first call starts `wlan.connect(...)` and returns control to Badgeware immediately; later update frames poll whether the connection is still connecting, connected, or offline. There is no sleep-based wait loop while connecting.
+
+Hidden SSIDs may not be selectable by the multi-WiFi scan-first logic because they may not appear in WLAN scan results. Stage 1 does not claim hidden SSID support. Standard `/secrets.py` fallback remains supported and does not require a scan when no multi-WiFi list is configured.
 
 ## Offline Behaviour
 

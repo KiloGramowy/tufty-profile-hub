@@ -38,9 +38,11 @@ badge.mode(HIRES | VSYNC)
 run(update)
 ```
 
-`__init__.py` owns the screen renderer, page navigation, scheduled refresh checks, and page-entry refresh triggers. It reads generated config and `QR_CODES` data at startup, while `QR_PAGES` remains available in generated files for host-side verification and future tooling.
+`__init__.py` owns the screen renderer, page navigation, scheduled refresh checks, and page-entry refresh triggers. It reads generated config and compact `QR_CODES` data at startup.
 
 The renderer keeps the proven Tufty visual proportions from the original project: Mona Sans vector text, the XIAO C5 board illustration, compact QR pages, and WDGWars/WiGLE stats cards.
+
+Network refresh is advanced as a non-blocking state machine. Page entry queues a refresh for a later update frame, and the Wi-Fi connection is then polled across frames so Badgeware can keep polling buttons.
 
 ## App Paths
 
