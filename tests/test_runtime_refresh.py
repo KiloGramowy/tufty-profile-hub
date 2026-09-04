@@ -70,12 +70,14 @@ class RuntimeRefreshTests(unittest.TestCase):
         runtime.last_input = None
         runtime.wdg_data = None
         runtime.wdg_status = "IDLE"
-        runtime.wdg_last_sync = start
+        runtime.wdg_last_success = None
         runtime.wdg_last_attempt = None
+        runtime.wdg_next_auto = runtime.ticks_add(start, SIX_HOURS_MS)
         runtime.wigle_data = None
         runtime.wigle_status = "IDLE"
-        runtime.wigle_last_sync = start
+        runtime.wigle_last_success = None
         runtime.wigle_last_attempt = None
+        runtime.wigle_next_auto = runtime.ticks_add(start, SIX_HOURS_MS)
 
     def test_no_background_api_calls_at_app_start(self):
         runtime.refresh_background(0)
@@ -96,12 +98,66 @@ class RuntimeRefreshTests(unittest.TestCase):
         page_entry_at = 60 * 60 * 1000
         runtime.refresh_page_entry(page_entry_at, "wdgwars")
         self.assertEqual(len(self.wdg_fetch.calls), 1)
+        self.assertEqual(runtime.wdg_next_auto, page_entry_at + SIX_HOURS_MS)
 
         runtime.refresh_background(SIX_HOURS_MS)
         self.assertEqual(len(self.wdg_fetch.calls), 1)
 
         runtime.refresh_background(page_entry_at + SIX_HOURS_MS)
         self.assertEqual(len(self.wdg_fetch.calls), 2)
+
+    def test_failed_auto_refresh_does_not_retry_after_sixty_seconds(self):
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_background(SIX_HOURS_MS)
+        runtime.refresh_background(SIX_HOURS_MS + COOLDOWN_MS)
+
+        self.assertEqual(len(runtime.wdgwars.fetch.calls), 1)
+        self.assertEqual(runtime.wdg_status, "OFFLINE")
+        self.assertEqual(runtime.wdg_next_auto, SIX_HOURS_MS * 2)
+
+    def test_failed_auto_refresh_becomes_due_again_after_six_hours(self):
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_background(SIX_HOURS_MS)
+        runtime.refresh_background(SIX_HOURS_MS * 2 - 1)
+        self.assertEqual(len(runtime.wdgwars.fetch.calls), 1)
+
+        runtime.refresh_background(SIX_HOURS_MS * 2)
+        self.assertEqual(len(runtime.wdgwars.fetch.calls), 2)
+
+    def test_successful_auto_refresh_schedules_next_attempt_after_six_hours(self):
+        runtime.refresh_background(SIX_HOURS_MS)
+        runtime.refresh_background(SIX_HOURS_MS + COOLDOWN_MS)
+
+        self.assertEqual(len(self.wdg_fetch.calls), 1)
+        self.assertEqual(runtime.wdg_last_success, SIX_HOURS_MS)
+        self.assertEqual(runtime.wdg_next_auto, SIX_HOURS_MS * 2)
+
+    def test_failed_page_entry_postpones_background_auto_attempt(self):
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_page_entry(SIX_HOURS_MS + 1000, "wdgwars")
+        runtime.refresh_background(SIX_HOURS_MS + COOLDOWN_MS + 1000)
+
+        self.assertEqual(len(runtime.wdgwars.fetch.calls), 1)
+        self.assertEqual(runtime.wdg_next_auto, SIX_HOURS_MS * 2 + 1000)
+
+    def test_successful_page_entry_postpones_background_auto_attempt(self):
+        runtime.refresh_page_entry(SIX_HOURS_MS + 1000, "wdgwars")
+        runtime.refresh_background(SIX_HOURS_MS + COOLDOWN_MS + 1000)
+
+        self.assertEqual(len(self.wdg_fetch.calls), 1)
+        self.assertEqual(runtime.wdg_next_auto, SIX_HOURS_MS * 2 + 1000)
+
+    def test_manual_page_entry_may_retry_after_sixty_seconds_when_auto_not_due(self):
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_page_entry(1000, "wdgwars")
+        runtime.refresh_page_entry(1000 + COOLDOWN_MS, "wdgwars")
+
+        self.assertEqual(len(runtime.wdgwars.fetch.calls), 2)
+        self.assertEqual(runtime.wdg_next_auto, 1000 + COOLDOWN_MS + SIX_HOURS_MS)
 
     def test_page_entry_cooldown_remains_per_integration(self):
         runtime.refresh_page_entry(1000, "wdgwars")
@@ -120,7 +176,8 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         self.assertIs(runtime.wdg_data, previous)
         self.assertEqual(runtime.wdg_status, "CACHED")
-        self.assertEqual(runtime.wdg_last_sync, 0)
+        self.assertIsNone(runtime.wdg_last_success)
+        self.assertEqual(runtime.wdg_next_auto, 1000 + SIX_HOURS_MS)
 
     def test_offline_failure_preserves_wigle_cached_data(self):
         previous = {"username": "cached", "global_rank": 100}
@@ -131,7 +188,8 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         self.assertIs(runtime.wigle_data, previous)
         self.assertEqual(runtime.wigle_status, "CACHED")
-        self.assertEqual(runtime.wigle_last_sync, 0)
+        self.assertIsNone(runtime.wigle_last_success)
+        self.assertEqual(runtime.wigle_next_auto, 1000 + SIX_HOURS_MS)
 
     def test_network_oserror_is_absorbed_by_runtime_boundary(self):
         previous = {"username": "cached"}
@@ -142,7 +200,8 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         self.assertIs(runtime.wdg_data, previous)
         self.assertEqual(runtime.wdg_status, "CACHED")
-        self.assertEqual(runtime.wdg_last_sync, 0)
+        self.assertIsNone(runtime.wdg_last_success)
+        self.assertEqual(runtime.wdg_next_auto, 1000 + SIX_HOURS_MS)
 
     def test_network_oserror_without_cached_data_reports_offline(self):
         runtime.wdgwars.fetch = RaisingFetcher()

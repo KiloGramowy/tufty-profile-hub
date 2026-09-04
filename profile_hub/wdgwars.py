@@ -217,6 +217,7 @@ class WDGWarsClient:
         self.network_manager = network_manager
         self.last_refresh_at = self.clock()
         self.last_page_entry_refresh_at = None
+        self.next_auto_refresh_at = self.last_refresh_at + self.auto_refresh_seconds
         self.last_data = None
         self.last_status = "setup-required" if not self.credentials_ready() else "idle"
         self.last_error = ""
@@ -227,7 +228,7 @@ class WDGWarsClient:
     def should_auto_refresh(self):
         if not self.credentials_ready():
             return False
-        return self.clock() - self.last_refresh_at >= self.auto_refresh_seconds
+        return self.clock() >= self.next_auto_refresh_at
 
     def should_page_entry_refresh(self):
         if not self.credentials_ready():
@@ -240,7 +241,9 @@ class WDGWarsClient:
     def scheduled_refresh(self):
         if not self.should_auto_refresh():
             return self.last_status
-        return self.refresh("scheduled")
+        status = self.refresh("scheduled")
+        self.next_auto_refresh_at = self.clock() + self.auto_refresh_seconds
+        return status
 
     def page_entry_refresh(self):
         if not self.credentials_ready():
@@ -250,7 +253,9 @@ class WDGWarsClient:
             self.last_status = "cooldown"
             return self.last_status
         self.last_page_entry_refresh_at = self.clock()
-        return self.refresh("page-entry")
+        status = self.refresh("page-entry")
+        self.next_auto_refresh_at = self.clock() + self.auto_refresh_seconds
+        return status
 
     def refresh(self, reason="manual"):
         if not self.credentials_ready():
@@ -284,6 +289,7 @@ class WDGWarsClient:
             "reason": reason,
         }
         self.last_refresh_at = self.clock()
+        self.next_auto_refresh_at = self.last_refresh_at + self.auto_refresh_seconds
         self.last_status = "ok"
         self.last_error = ""
         return self.last_status

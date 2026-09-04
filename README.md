@@ -117,7 +117,7 @@ The screen keeps the compact reliable subset: username, global rank, monthly ran
 
 Profile Hub does not contact WDGWars or WiGLE automatically at app startup.
 
-Both integrations become eligible for automatic refresh every 6 hours while Profile Hub is actively running, regardless of which Profile Hub page is displayed. Entering the WDGWars or WiGLE page also attempts an immediate live refresh. A 60-second per-integration cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation, and a successful page-entry refresh resets that integration's next 6-hour automatic refresh.
+Both integrations become eligible for one automatic refresh attempt every 6 hours while Profile Hub is actively running, regardless of which Profile Hub page is displayed. Entering the WDGWars or WiGLE page also attempts an immediate live refresh. A 60-second per-integration cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation, and any page-entry attempt resets that integration's next 6-hour automatic attempt.
 
 Profile Hub is a Badgeware app, not an operating-system daemon. It does not refresh while another Badgeware app is running, while the launcher is open, while the device is powered off, or while Profile Hub is not running.
 

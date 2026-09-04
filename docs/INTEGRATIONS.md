@@ -12,11 +12,11 @@ Defaults:
 | Page-entry live refresh | enabled |
 | Per-integration cooldown | 60 seconds |
 
-Profile Hub does not contact WDGWars or WiGLE automatically at app startup. Each integration's first automatic refresh becomes due 6 hours after the app starts.
+Profile Hub does not contact WDGWars or WiGLE automatically at app startup. Each integration's first automatic refresh attempt becomes due 6 hours after the app starts.
 
-While Profile Hub remains running, WDGWars and WiGLE are each eligible for automatic refresh every 6 hours. That background check is independent of the currently displayed Profile Hub page.
+While Profile Hub remains running, WDGWars and WiGLE are each eligible for at most one automatic refresh attempt every 6 hours. That background check is independent of the currently displayed Profile Hub page.
 
-When the user enters an integration page, the app attempts a live refresh immediately unless that integration was attempted within the last 60 seconds. A successful page-entry refresh resets that integration's 6-hour automatic timer, so the app does not also perform the originally scheduled automatic request.
+When the user enters an integration page, the app attempts a live refresh immediately unless that integration was attempted within the last 60 seconds. Any actual automatic or page-entry attempt, successful or failed, schedules that integration's next automatic attempt for 6 hours later. This prevents a continuous automatic retry loop while still allowing an explicit page-entry retry after the 60-second cooldown.
 
 The automatic timer only runs while Profile Hub itself is running. Badgeware apps are not permanent background daemons, so no refresh happens while another app is open, while Tufty is in the launcher, while Profile Hub is closed, or while the device is powered off.
 

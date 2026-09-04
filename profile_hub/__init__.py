@@ -121,13 +121,15 @@ NETWORK = NetworkManager(getattr(cfg, "WIFI_NETWORKS", []))
 
 wdg_data = None
 wdg_status = "IDLE"
-wdg_last_sync = APP_START_TICKS
+wdg_last_success = None
 wdg_last_attempt = None
+wdg_next_auto = None
 
 wigle_data = None
 wigle_status = "IDLE"
-wigle_last_sync = APP_START_TICKS
+wigle_last_success = None
 wigle_last_attempt = None
+wigle_next_auto = None
 
 
 def ticks_elapsed(now, previous):
@@ -152,8 +154,17 @@ def attempt_ready(now, last_attempt, cooldown_ms):
     return ticks_elapsed(now, last_attempt) >= cooldown_ms
 
 
+def ticks_add(ticks, delta):
+    wrap = 1 << 30
+    return (int(ticks) + int(delta)) % wrap
+
+
 def offline_status(previous):
     return "CACHED" if previous is not None else "OFFLINE"
+
+
+wdg_next_auto = ticks_add(APP_START_TICKS, cfg.WDGWARS_REFRESH_MS)
+wigle_next_auto = ticks_add(APP_START_TICKS, cfg.WIGLE_REFRESH_MS)
 
 
 def vmeasure(text, size):
@@ -500,7 +511,7 @@ def draw_wigle():
 
 
 def refresh_wdgwars(now):
-    global wdg_data, wdg_status, wdg_last_sync, wdg_last_attempt
+    global wdg_data, wdg_status, wdg_last_success, wdg_last_attempt, wdg_next_auto
 
     if not cfg.WDGWARS_ENABLED:
         return
@@ -508,6 +519,7 @@ def refresh_wdgwars(now):
         return
 
     wdg_last_attempt = now
+    wdg_next_auto = ticks_add(now, cfg.WDGWARS_REFRESH_MS)
     try:
         status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
     except OSError:
@@ -518,12 +530,11 @@ def refresh_wdgwars(now):
     wdg_status = status
     if status == "LIVE" and data is not None:
         wdg_data = data
-    if status in ("LIVE", "NO KEY"):
-        wdg_last_sync = now
+        wdg_last_success = now
 
 
 def refresh_wigle(now):
-    global wigle_data, wigle_status, wigle_last_sync, wigle_last_attempt
+    global wigle_data, wigle_status, wigle_last_success, wigle_last_attempt, wigle_next_auto
 
     if not cfg.WIGLE_ENABLED:
         return
@@ -531,6 +542,7 @@ def refresh_wigle(now):
         return
 
     wigle_last_attempt = now
+    wigle_next_auto = ticks_add(now, cfg.WIGLE_REFRESH_MS)
     try:
         status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
     except OSError:
@@ -541,8 +553,7 @@ def refresh_wigle(now):
     wigle_status = status
     if status == "LIVE" and data is not None:
         wigle_data = data
-    if status in ("LIVE", "NO KEY"):
-        wigle_last_sync = now
+        wigle_last_success = now
 
 
 def refresh_page_entry(now, page_id):
@@ -553,16 +564,13 @@ def refresh_page_entry(now, page_id):
 
 
 def refresh_background(now):
-    if cfg.WDGWARS_ENABLED and ticks_elapsed(now, wdg_last_sync) >= cfg.WDGWARS_REFRESH_MS:
+    if cfg.WDGWARS_ENABLED and ticks_elapsed(now, wdg_next_auto) >= 0:
         refresh_wdgwars(now)
-    if cfg.WIGLE_ENABLED and ticks_elapsed(now, wigle_last_sync) >= cfg.WIGLE_REFRESH_MS:
+    if cfg.WIGLE_ENABLED and ticks_elapsed(now, wigle_next_auto) >= 0:
         refresh_wigle(now)
 
 
 def refresh_current(now, entered=False):
-    global wdg_data, wdg_status, wdg_last_sync, wdg_last_attempt
-    global wigle_data, wigle_status, wigle_last_sync, wigle_last_attempt
-
     current = PAGES[page_index]
     if entered:
         refresh_page_entry(now, current)
