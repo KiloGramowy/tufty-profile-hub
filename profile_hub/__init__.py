@@ -152,6 +152,10 @@ def attempt_ready(now, last_attempt, cooldown_ms):
     return ticks_elapsed(now, last_attempt) >= cooldown_ms
 
 
+def offline_status(previous):
+    return "CACHED" if previous is not None else "OFFLINE"
+
+
 def vmeasure(text, size):
     screen.font = MONA
     return int(screen.measure_text(str(text), size)[0])
@@ -504,9 +508,15 @@ def refresh_wdgwars(now):
         return
 
     wdg_last_attempt = now
-    status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
+    try:
+        status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
+    except OSError:
+        wdg_status = offline_status(wdg_data)
+        return
+    if status == "OFFLINE" and wdg_data is not None:
+        status = "CACHED"
     wdg_status = status
-    if data is not None:
+    if status == "LIVE" and data is not None:
         wdg_data = data
     if status in ("LIVE", "NO KEY"):
         wdg_last_sync = now
@@ -521,9 +531,15 @@ def refresh_wigle(now):
         return
 
     wigle_last_attempt = now
-    status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
+    try:
+        status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
+    except OSError:
+        wigle_status = offline_status(wigle_data)
+        return
+    if status == "OFFLINE" and wigle_data is not None:
+        status = "CACHED"
     wigle_status = status
-    if data is not None:
+    if status == "LIVE" and data is not None:
         wigle_data = data
     if status in ("LIVE", "NO KEY"):
         wigle_last_sync = now

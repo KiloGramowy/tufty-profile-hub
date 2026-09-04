@@ -55,7 +55,9 @@ Hidden SSIDs may not be selectable by this scan-first logic because they may not
 
 ## Offline Behaviour
 
-Network failure must not break normal badge navigation. Integration pages show `OFFLINE`, `NO WIFI`, or a setup message. If previously fetched in-memory data is available, the page keeps showing it with an offline marker.
+Network failure must not break normal badge navigation. Integration pages show `OFFLINE`, `CACHED`, or a setup message. If previously fetched in-memory data is available, the page keeps showing it with a cached/offline marker.
+
+Profile Hub treats lost Wi-Fi as a normal runtime condition, not a Badgeware fatal error. A failed network attempt must return control to the app without a reset, launcher exit, grey system error screen, or modal OK prompt.
 
 ## Power Behaviour
 

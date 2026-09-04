@@ -121,6 +121,8 @@ Both integrations become eligible for automatic refresh every 6 hours while Prof
 
 Profile Hub is a Badgeware app, not an operating-system daemon. It does not refresh while another Badgeware app is running, while the launcher is open, while the device is powered off, or while Profile Hub is not running.
 
+Loss of Wi-Fi is treated as a normal non-fatal condition. If live statistics were previously downloaded, Profile Hub keeps the cached in-memory values on screen and marks the integration as cached/offline.
+
 ## 📶 Wi-Fi
 
 By default, Profile Hub is compatible with Pimoroni's standard root `/secrets.py`:

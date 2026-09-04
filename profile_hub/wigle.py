@@ -29,6 +29,10 @@ DEFAULT_AUTO_REFRESH_SECONDS = 6 * 60 * 60
 DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS = 60
 
 
+def offline_status(previous):
+    return "CACHED" if previous is not None else "OFFLINE"
+
+
 def now_seconds():
     if time and hasattr(time, "time"):
         return int(time.time())
@@ -178,18 +182,18 @@ def fetch(api_name, api_token, previous=None, network_manager=None, requests_mod
         return "NO KEY", previous
     requests = requests_module if requests_module is not None else _requests
     if requests is None:
-        return "ERROR", previous
+        return offline_status(previous), previous
     if network_manager is not None:
         try:
             if not network_manager.ensure_connected():
-                return "CONNECTING", previous
-        except Exception:
-            return "CONNECTING", previous
+                return offline_status(previous), previous
+        except OSError:
+            return offline_status(previous), previous
 
     try:
         auth = basic_auth_header(api_name, api_token)
     except Exception:
-        return "ERROR", previous
+        return offline_status(previous), previous
 
     headers = {
         "Authorization": auth,
@@ -200,7 +204,7 @@ def fetch(api_name, api_token, previous=None, network_manager=None, requests_mod
     profile = _json(PROFILE_ENDPOINT, headers, requests)
     stats = _json(STATS_ENDPOINT, headers, requests)
     if not isinstance(stats, dict):
-        return "ERROR", previous
+        return offline_status(previous), previous
 
     return "LIVE", normalize_runtime_data(profile, stats)
 
@@ -265,18 +269,24 @@ class WiGLEClient:
             self.last_status = "setup-required"
             return self.last_status
         if self.requests is None:
-            self.last_status = "offline"
+            self.last_status = "cached" if self.last_data is not None else "offline"
             return self.last_status
-        if self.network_manager and not self.network_manager.ensure_connected():
-            self.last_status = "offline"
-            return self.last_status
+        if self.network_manager:
+            try:
+                if not self.network_manager.ensure_connected():
+                    self.last_status = "cached" if self.last_data is not None else "offline"
+                    return self.last_status
+            except OSError as exc:
+                self.last_status = "cached" if self.last_data is not None else "offline"
+                self.last_error = str(exc)
+                return self.last_status
 
         headers = {"Authorization": basic_auth_header(self.api_name, self.api_token)}
         try:
             profile = self._get_json(PROFILE_ENDPOINT, headers)
             stats = self._get_json(STATS_ENDPOINT, headers)
-        except Exception as exc:
-            self.last_status = "error"
+        except OSError as exc:
+            self.last_status = "cached" if self.last_data is not None else "offline"
             self.last_error = str(exc)
             return self.last_status
 

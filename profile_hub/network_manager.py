@@ -109,21 +109,26 @@ class NetworkManager:
         network = self._network()
         if network is None:
             return None
-        self.wlan = network.WLAN(network.STA_IF)
+        try:
+            self.wlan = network.WLAN(network.STA_IF)
+        except Exception as exc:
+            self.last_error = exc
+            return None
         return self.wlan
 
     def is_connected(self):
-        wlan = self._wlan()
         try:
+            wlan = self._wlan()
             return bool(wlan and wlan.isconnected())
-        except Exception:
+        except Exception as exc:
+            self.last_error = exc
             return False
 
     def scan(self):
-        wlan = self._wlan()
-        if wlan is None:
-            return []
         try:
+            wlan = self._wlan()
+            if wlan is None:
+                return []
             wlan.active(True)
             return wlan.scan()
         except Exception as exc:
@@ -142,7 +147,11 @@ class NetworkManager:
         if not self.fallback_to_secrets:
             return False
 
-        fallback = self.secrets_loader()
+        try:
+            fallback = self.secrets_loader()
+        except Exception as exc:
+            self.last_error = exc
+            return False
         if not fallback:
             return False
         if fallback.get("ssid") not in visible_ssids(scan_results):

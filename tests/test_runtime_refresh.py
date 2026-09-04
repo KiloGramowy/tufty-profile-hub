@@ -25,6 +25,24 @@ class Fetcher:
         return "LIVE", {self.key: len(self.calls)}
 
 
+class OfflineFetcher:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args):
+        self.calls.append(args)
+        return "OFFLINE", args[1]
+
+
+class RaisingFetcher:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, *args):
+        self.calls.append(args)
+        raise OSError("network down")
+
+
 class RuntimeRefreshTests(unittest.TestCase):
     def setUp(self):
         self.wdg_fetch = Fetcher("wdg")
@@ -92,6 +110,51 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         self.assertEqual(len(self.wdg_fetch.calls), 2)
         self.assertEqual(self.wigle_fetch.calls, [])
+
+    def test_offline_failure_preserves_wdgwars_cached_data(self):
+        previous = {"username": "cached", "rank_all": 1}
+        runtime.wdg_data = previous
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_page_entry(1000, "wdgwars")
+
+        self.assertIs(runtime.wdg_data, previous)
+        self.assertEqual(runtime.wdg_status, "CACHED")
+        self.assertEqual(runtime.wdg_last_sync, 0)
+
+    def test_offline_failure_preserves_wigle_cached_data(self):
+        previous = {"username": "cached", "global_rank": 100}
+        runtime.wigle_data = previous
+        runtime.wigle.fetch = OfflineFetcher()
+
+        runtime.refresh_page_entry(1000, "wigle")
+
+        self.assertIs(runtime.wigle_data, previous)
+        self.assertEqual(runtime.wigle_status, "CACHED")
+        self.assertEqual(runtime.wigle_last_sync, 0)
+
+    def test_network_oserror_is_absorbed_by_runtime_boundary(self):
+        previous = {"username": "cached"}
+        runtime.wdg_data = previous
+        runtime.wdgwars.fetch = RaisingFetcher()
+
+        runtime.refresh_page_entry(1000, "wdgwars")
+
+        self.assertIs(runtime.wdg_data, previous)
+        self.assertEqual(runtime.wdg_status, "CACHED")
+        self.assertEqual(runtime.wdg_last_sync, 0)
+
+    def test_network_oserror_without_cached_data_reports_offline(self):
+        runtime.wdgwars.fetch = RaisingFetcher()
+        runtime.wigle.fetch = RaisingFetcher()
+
+        runtime.refresh_page_entry(1000, "wdgwars")
+        runtime.refresh_page_entry(1000, "wigle")
+
+        self.assertIsNone(runtime.wdg_data)
+        self.assertIsNone(runtime.wigle_data)
+        self.assertEqual(runtime.wdg_status, "OFFLINE")
+        self.assertEqual(runtime.wigle_status, "OFFLINE")
 
     def test_tick_elapsed_handles_wrap(self):
         wrap = 1 << 30

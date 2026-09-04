@@ -20,6 +20,10 @@ DEFAULT_AUTO_REFRESH_SECONDS = 6 * 60 * 60
 DEFAULT_PAGE_ENTRY_COOLDOWN_SECONDS = 60
 
 
+def offline_status(previous):
+    return "CACHED" if previous is not None else "OFFLINE"
+
+
 def now_seconds():
     if time and hasattr(time, "time"):
         return int(time.time())
@@ -172,13 +176,13 @@ def fetch(api_key, previous=None, network_manager=None, requests_module=None):
         return "NO KEY", previous
     requests = requests_module if requests_module is not None else _requests
     if requests is None:
-        return "ERROR", previous
+        return offline_status(previous), previous
     if network_manager is not None:
         try:
             if not network_manager.ensure_connected():
-                return "CONNECTING", previous
-        except Exception:
-            return "CONNECTING", previous
+                return offline_status(previous), previous
+        except OSError:
+            return offline_status(previous), previous
 
     headers = {
         "X-API-Key": api_key,
@@ -187,9 +191,9 @@ def fetch(api_key, previous=None, network_manager=None, requests_module=None):
     }
     me = _json(ME_ENDPOINT, headers, requests)
     if not isinstance(me, dict):
-        return "ERROR", previous
+        return offline_status(previous), previous
     if "ok" in me and not me.get("ok"):
-        return "ERROR", previous
+        return offline_status(previous), previous
 
     leaderboard = _json(LEADERBOARD_ENDPOINT, headers, requests)
     return "LIVE", normalize_runtime_data(me, leaderboard, previous)
@@ -253,18 +257,24 @@ class WDGWarsClient:
             self.last_status = "setup-required"
             return self.last_status
         if self.requests is None:
-            self.last_status = "offline"
+            self.last_status = "cached" if self.last_data is not None else "offline"
             return self.last_status
-        if self.network_manager and not self.network_manager.ensure_connected():
-            self.last_status = "offline"
-            return self.last_status
+        if self.network_manager:
+            try:
+                if not self.network_manager.ensure_connected():
+                    self.last_status = "cached" if self.last_data is not None else "offline"
+                    return self.last_status
+            except OSError as exc:
+                self.last_status = "cached" if self.last_data is not None else "offline"
+                self.last_error = str(exc)
+                return self.last_status
 
         headers = {"X-API-Key": self.api_key}
         try:
             me = self._get_json(ME_ENDPOINT, headers)
             leaderboard = self._get_json(LEADERBOARD_ENDPOINT, headers)
-        except Exception as exc:
-            self.last_status = "error"
+        except OSError as exc:
+            self.last_status = "cached" if self.last_data is not None else "offline"
             self.last_error = str(exc)
             return self.last_status
 

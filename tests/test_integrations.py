@@ -52,6 +52,11 @@ class OnlineNetwork:
         return True
 
 
+class RaisingRequests:
+    def get(self, url, headers=None, timeout=None):
+        raise OSError("network down")
+
+
 class Clock:
     def __init__(self, value=1000):
         self.value = value
@@ -177,7 +182,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(normalized["bluetooth"], 4)
         self.assertEqual(normalized["cellular"], 5)
 
-    def test_offline_refresh_keeps_previous_data(self):
+    def test_wdgwars_offline_refresh_keeps_previous_data(self):
         client = WDGWarsClient(
             api_key="demo",
             requests_module=FakeRequests(),
@@ -185,8 +190,49 @@ class IntegrationTests(unittest.TestCase):
         )
         previous = {"me": {"username": "cached"}}
         client.last_data = previous
-        self.assertEqual(client.refresh(), "offline")
+        self.assertEqual(client.refresh(), "cached")
         self.assertIs(client.last_data, previous)
+
+        status, data = fetch_wdgwars("demo", previous, OfflineNetwork(), FakeRequests())
+        self.assertEqual(status, "CACHED")
+        self.assertIs(data, previous)
+
+    def test_wigle_offline_refresh_keeps_previous_data(self):
+        client = WiGLEClient(
+            api_name="demo-name",
+            api_token="demo-value",
+            requests_module=FakeRequests(),
+            network_manager=OfflineNetwork(),
+        )
+        previous = {"stats": {"username": "cached"}}
+        client.last_data = previous
+        self.assertEqual(client.refresh(), "cached")
+        self.assertIs(client.last_data, previous)
+
+        status, data = fetch_wigle("demo-name", "demo-value", previous, OfflineNetwork(), FakeRequests())
+        self.assertEqual(status, "CACHED")
+        self.assertIs(data, previous)
+
+    def test_offline_without_previous_data_reports_offline(self):
+        self.assertEqual(
+            fetch_wdgwars("demo", None, OfflineNetwork(), FakeRequests()),
+            ("OFFLINE", None),
+        )
+        self.assertEqual(
+            fetch_wigle("demo-name", "demo-value", None, OfflineNetwork(), FakeRequests()),
+            ("OFFLINE", None),
+        )
+
+    def test_request_oserror_preserves_previous_data(self):
+        previous = {"username": "cached"}
+        self.assertEqual(
+            fetch_wdgwars("demo", previous, OnlineNetwork(), RaisingRequests()),
+            ("CACHED", previous),
+        )
+        self.assertEqual(
+            fetch_wigle("demo-name", "demo-value", previous, OnlineNetwork(), RaisingRequests()),
+            ("CACHED", previous),
+        )
 
     def test_zip_compatible_wdgwars_fetch_preserves_runtime_shape(self):
         requests = FakeRequests(
