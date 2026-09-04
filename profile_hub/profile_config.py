@@ -12,6 +12,7 @@ PROFILE = {
 }
 
 LINKS = []
+PAGE_ORDER = ["main", "wdgwars", "wigle"]
 
 PAGES = [
     {"id": "main", "type": "main"},
@@ -36,3 +37,25 @@ INTEGRATIONS = {
 }
 
 WIFI_NETWORKS = []
+
+NAME_LINE1 = PROFILE["name_line1"]
+NAME_LINE2 = PROFILE["name_line2"]
+JOB_TITLE = PROFILE["job_title"]
+PRIMARY_LABEL = PROFILE["primary_label"]
+TAGLINE = PROFILE["tagline"]
+THEME = "pcb"
+BOARD_ICON = "xiao_c5"
+
+WDGWARS_ENABLED = True
+WDGWARS_API_KEY = ""
+WDGWARS_REFRESH_MS = 6 * 60 * 60 * 1000
+WDGWARS_PAGE_ENTRY_COOLDOWN_MS = 60 * 1000
+
+WIGLE_ENABLED = True
+WIGLE_API_NAME = ""
+WIGLE_API_TOKEN = ""
+WIGLE_REFRESH_MS = 6 * 60 * 60 * 1000
+WIGLE_PAGE_ENTRY_COOLDOWN_MS = 60 * 1000
+
+RETRY_MS = 60 * 1000
+INPUT_DELAY_MS = 180

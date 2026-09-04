@@ -55,6 +55,22 @@ class BuilderTests(unittest.TestCase):
             self.assertEqual(website["url"], "https://example.com")
             self.assertGreater(len(website["matrix"]), 20)
             self.assertEqual(website["matrix"], build_profile.make_qr_matrix("https://example.com"))
+            self.assertIn("website", module.QR_CODES)
+            n, rows = module.QR_CODES["website"]
+            self.assertEqual(n, len(rows))
+            self.assertEqual((n, rows), build_profile.make_qr_rows("https://example.com"))
+
+            config_spec = importlib.util.spec_from_file_location(
+                "profile_config_test", out_dir / "profile_config.py"
+            )
+            config_module = importlib.util.module_from_spec(config_spec)
+            config_spec.loader.exec_module(config_module)
+            self.assertEqual(config_module.NAME_LINE1, "Your")
+            self.assertEqual(config_module.PAGE_ORDER, ["main", "website", "youtube", "github", "wdgwars", "wigle"])
+            self.assertEqual(config_module.WDGWARS_REFRESH_MS, 6 * 60 * 60 * 1000)
+            self.assertEqual(config_module.WDGWARS_PAGE_ENTRY_COOLDOWN_MS, 60 * 1000)
+            self.assertEqual(config_module.WIGLE_REFRESH_MS, 6 * 60 * 60 * 1000)
+            self.assertEqual(config_module.WIGLE_PAGE_ENTRY_COOLDOWN_MS, 60 * 1000)
 
     def test_custom_link_is_appended_and_qr_generated(self):
         profile, credentials = self.load_examples()

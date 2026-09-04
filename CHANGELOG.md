@@ -11,6 +11,7 @@ All notable changes to Tufty Profile Hub will be documented in this file.
 - Configurable identity text, page ordering, and arbitrary QR pages.
 - Public Kilo demo preset with no private credentials.
 - First-class WDGWars and WiGLE integration modules with setup-safe blank credentials.
+- Badgeware-native renderer based on the proven Tufty project layout, including Mona Sans, XIAO C5 artwork, compact QR pages, and stats cards.
 - Six-hour automatic refresh policy while Profile Hub is running.
 - Live integration refresh on page entry with a 60-second cooldown.
 - Optional multi-WiFi support with standard `/secrets.py` fallback.

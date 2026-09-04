@@ -8,13 +8,19 @@ except ImportError:  # pragma: no cover
 try:
     import ubinascii as binascii
 except ImportError:  # pragma: no cover
-    import base64
-    binascii = None
+    try:
+        import binascii
+    except ImportError:
+        import base64
+        binascii = None
 
 try:
-    import urequests as _requests
-except ImportError:  # pragma: no cover - host tests inject a fake module.
-    _requests = None
+    import requests as _requests
+except ImportError:  # pragma: no cover - Badgeware variants may expose urequests.
+    try:
+        import urequests as _requests
+    except ImportError:  # pragma: no cover - host tests inject a fake module.
+        _requests = None
 
 
 PROFILE_ENDPOINT = "https://api.wigle.net/api/v2/profile/user"
@@ -38,6 +44,13 @@ def _get(data, names, default=None):
         if name in data and data[name] not in (None, ""):
             return data[name]
     return default
+
+
+def _int(value):
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
 
 
 def _first_dict(*items):
@@ -77,6 +90,110 @@ def normalize_stats(payload):
         "bluetooth": _get(stats, ("DiscoveredBt", "discoveredBt", "bluetooth", "bt"), None),
         "cellular": _get(stats, ("DiscoveredCell", "discoveredCell", "cellular", "cell"), None),
     }
+
+
+def _json(url, headers, requests_module=None):
+    requests = requests_module if requests_module is not None else _requests
+    if requests is None:
+        return None
+    response = None
+    try:
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+        except TypeError:
+            response = requests.get(url, headers=headers)
+        return response.json()
+    except Exception:
+        return None
+    finally:
+        if response is not None:
+            try:
+                response.close()
+            except Exception:
+                pass
+
+
+def normalize_runtime_data(profile, stats):
+    blob = {}
+    if isinstance(stats, dict):
+        blob = stats.get("statistics") or stats.get("stats") or {}
+    if not isinstance(blob, dict):
+        blob = {}
+
+    username = ""
+    if isinstance(profile, dict):
+        username = str(
+            profile.get("userid")
+            or profile.get("userId")
+            or profile.get("userName")
+            or profile.get("username")
+            or ""
+        )
+    if not username and isinstance(stats, dict):
+        username = str(stats.get("user") or stats.get("User") or "")
+
+    return {
+        "username": username,
+        "join_date": str(
+            profile.get("joindate") or profile.get("joinDate") or profile.get("joined") or ""
+        )
+        if isinstance(profile, dict)
+        else "",
+        "last_login": str(profile.get("lastlogin") or profile.get("lastLogin") or "")
+        if isinstance(profile, dict)
+        else "",
+        "global_rank": _int(
+            _get(stats, ("rank", "Rank", "globalRank"), None)
+            or _get(blob, ("rank", "Rank", "globalRank"), None)
+        ),
+        "month_rank": _int(
+            _get(stats, ("monthRank", "MonthRank", "monthlyRank"), None)
+            or _get(blob, ("monthRank", "MonthRank", "monthlyRank"), None)
+        ),
+        "wifi": _int(_get(blob, ("discoveredWiFi", "DiscoveredWiFi", "wifi"), None)),
+        "wifi_gps": _int(_get(blob, ("discoveredWiFiGPS", "DiscoveredWiFiGPS"), None)),
+        "wifi_gps_percent": float(
+            _get(blob, ("discoveredWiFiGPSPercent", "DiscoveredWiFiGPSPercent"), 0) or 0
+        ),
+        "bluetooth": _int(_get(blob, ("discoveredBt", "DiscoveredBt", "bluetooth"), None)),
+        "cell": _int(_get(blob, ("discoveredCell", "DiscoveredCell", "cellular"), None)),
+        "locations": _int(_get(blob, ("totalWiFiLocations", "TotalWiFiLocations"), None)),
+        "month_count": _int(_get(blob, ("eventMonthCount", "EventMonthCount"), None)),
+    }
+
+
+def fetch(api_name, api_token, previous=None, network_manager=None, requests_module=None):
+    """ZIP-compatible fetch API used by the Badgeware renderer."""
+
+    if not api_name or not api_token:
+        return "NO KEY", previous
+    requests = requests_module if requests_module is not None else _requests
+    if requests is None:
+        return "ERROR", previous
+    if network_manager is not None:
+        try:
+            if not network_manager.ensure_connected():
+                return "CONNECTING", previous
+        except Exception:
+            return "CONNECTING", previous
+
+    try:
+        auth = basic_auth_header(api_name, api_token)
+    except Exception:
+        return "ERROR", previous
+
+    headers = {
+        "Authorization": auth,
+        "Accept": "application/json",
+        "User-Agent": "TuftyProfileHub/0.1",
+    }
+
+    profile = _json(PROFILE_ENDPOINT, headers, requests)
+    stats = _json(STATS_ENDPOINT, headers, requests)
+    if not isinstance(stats, dict):
+        return "ERROR", previous
+
+    return "LIVE", normalize_runtime_data(profile, stats)
 
 
 class WiGLEClient:

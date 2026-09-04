@@ -21,7 +21,7 @@ Badgeware runtime on Tufty 2350
 
 ## Host Builder
 
-`build_profile.py` runs on a normal computer with CPython. It validates JSON configuration, checks page order, generates QR matrices with the `qrcode` package, and writes a private app folder to `dist/profile_hub/`.
+`build_profile.py` runs on a normal computer with CPython. It validates JSON configuration, checks page order, generates compact QR row data for the Badgeware renderer, and writes a private app folder to `dist/profile_hub/`.
 
 The builder is the only part of the project that requires `qrcode` or Pillow. Those packages are intentionally absent from the Tufty runtime.
 
@@ -38,7 +38,9 @@ badge.mode(HIRES | VSYNC)
 run(update)
 ```
 
-`__init__.py` owns the screen renderer, page navigation, scheduled refresh checks, and page-entry refresh triggers. It reads generated config and QR matrices at startup.
+`__init__.py` owns the screen renderer, page navigation, scheduled refresh checks, and page-entry refresh triggers. It reads generated config and `QR_CODES` data at startup, while `QR_PAGES` remains available in generated files for host-side verification and future tooling.
+
+The renderer keeps the proven Tufty visual proportions from the original project: Mona Sans vector text, the XIAO C5 board illustration, compact QR pages, and WDGWars/WiGLE stats cards.
 
 ## App Paths
 

@@ -10,6 +10,6 @@ Files committed here are public templates. The generated files in `dist/profile_
 - `profile_config.py` - public placeholder, replaced during build.
 - `generated_qr.py` - public placeholder, replaced during build.
 - `network_manager.py` - optional multi-WiFi selection and `/secrets.py` fallback.
-- `wdgwars.py` - WDGWars client, refresh gate, and parser.
-- `wigle.py` - WiGLE client, refresh gate, and parser.
+- `wdgwars.py` - WDGWars client and parser.
+- `wigle.py` - WiGLE client and parser.
 - `icon.png` - 24x24 launcher icon.
