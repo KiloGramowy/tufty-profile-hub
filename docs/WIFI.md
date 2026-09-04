@@ -51,6 +51,8 @@ Runtime behaviour:
 
 This avoids long repeated connection attempts to unavailable networks and reduces the chance of tripping helper-level fatal Wi-Fi error states.
 
+Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results. Stage 1 does not claim hidden SSID support. Standard visible `/secrets.py` fallback remains supported.
+
 ## Offline Behaviour
 
 Network failure must not break normal badge navigation. Integration pages show `OFFLINE`, `NO WIFI`, or a setup message. If previously fetched in-memory data is available, the page keeps showing it with an offline marker.

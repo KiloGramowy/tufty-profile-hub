@@ -6,9 +6,11 @@
 try:
     import os
     import sys
+    import time as _time
 except ImportError:  # pragma: no cover - host safety.
     os = None
     sys = None
+    _time = None
 
 
 def _bootstrap_app_dir():
@@ -55,20 +57,14 @@ try:
 except Exception:
     BADGEWARE_READY = False
 
-try:
-    _RUN = run
-except NameError:
-    try:
-        from badgeware import run as _RUN
-    except Exception:
-        _RUN = None
-
 
 W = 320
 H = 240
+APP_START_TICKS = 0
 if BADGEWARE_READY:
     W = screen.width
     H = screen.height
+    APP_START_TICKS = badge.ticks
     MONA = font.load("/system/assets/fonts/MonaSans-Medium.af")
     PIXEL = font.winds
 else:
@@ -118,20 +114,42 @@ if not PAGES or PAGES[0] != "main":
     PAGES = ["main"] + [item for item in PAGES if item != "main"]
 
 page_index = 0
-last_input = -999999
+last_input = None
 last_page_id = None
 
 NETWORK = NetworkManager(getattr(cfg, "WIFI_NETWORKS", []))
 
 wdg_data = None
 wdg_status = "IDLE"
-wdg_last_sync = -cfg.WDGWARS_REFRESH_MS
-wdg_last_attempt = -cfg.WDGWARS_PAGE_ENTRY_COOLDOWN_MS
+wdg_last_sync = APP_START_TICKS
+wdg_last_attempt = None
 
 wigle_data = None
 wigle_status = "IDLE"
-wigle_last_sync = -cfg.WIGLE_REFRESH_MS
-wigle_last_attempt = -cfg.WIGLE_PAGE_ENTRY_COOLDOWN_MS
+wigle_last_sync = APP_START_TICKS
+wigle_last_attempt = None
+
+
+def ticks_elapsed(now, previous):
+    if previous is None:
+        return 1 << 30
+    if _time is not None and hasattr(_time, "ticks_diff"):
+        try:
+            return _time.ticks_diff(now, previous)
+        except Exception:
+            pass
+    diff = int(now) - int(previous)
+    wrap = 1 << 30
+    half = wrap >> 1
+    if diff < -half:
+        return diff + wrap
+    if diff > half:
+        return diff - wrap
+    return diff
+
+
+def attempt_ready(now, last_attempt, cooldown_ms):
+    return ticks_elapsed(now, last_attempt) >= cooldown_ms
 
 
 def vmeasure(text, size):
@@ -477,33 +495,62 @@ def draw_wigle():
     footer()
 
 
+def refresh_wdgwars(now):
+    global wdg_data, wdg_status, wdg_last_sync, wdg_last_attempt
+
+    if not cfg.WDGWARS_ENABLED:
+        return
+    if not attempt_ready(now, wdg_last_attempt, cfg.WDGWARS_PAGE_ENTRY_COOLDOWN_MS):
+        return
+
+    wdg_last_attempt = now
+    status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
+    wdg_status = status
+    if data is not None:
+        wdg_data = data
+    if status in ("LIVE", "NO KEY"):
+        wdg_last_sync = now
+
+
+def refresh_wigle(now):
+    global wigle_data, wigle_status, wigle_last_sync, wigle_last_attempt
+
+    if not cfg.WIGLE_ENABLED:
+        return
+    if not attempt_ready(now, wigle_last_attempt, cfg.WIGLE_PAGE_ENTRY_COOLDOWN_MS):
+        return
+
+    wigle_last_attempt = now
+    status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
+    wigle_status = status
+    if data is not None:
+        wigle_data = data
+    if status in ("LIVE", "NO KEY"):
+        wigle_last_sync = now
+
+
+def refresh_page_entry(now, page_id):
+    if page_id == "wdgwars":
+        refresh_wdgwars(now)
+    elif page_id == "wigle":
+        refresh_wigle(now)
+
+
+def refresh_background(now):
+    if cfg.WDGWARS_ENABLED and ticks_elapsed(now, wdg_last_sync) >= cfg.WDGWARS_REFRESH_MS:
+        refresh_wdgwars(now)
+    if cfg.WIGLE_ENABLED and ticks_elapsed(now, wigle_last_sync) >= cfg.WIGLE_REFRESH_MS:
+        refresh_wigle(now)
+
+
 def refresh_current(now, entered=False):
     global wdg_data, wdg_status, wdg_last_sync, wdg_last_attempt
     global wigle_data, wigle_status, wigle_last_sync, wigle_last_attempt
 
     current = PAGES[page_index]
-
-    if current == "wdgwars" and cfg.WDGWARS_ENABLED:
-        due = entered or (now - wdg_last_sync >= cfg.WDGWARS_REFRESH_MS)
-        if due and (now - wdg_last_attempt >= cfg.WDGWARS_PAGE_ENTRY_COOLDOWN_MS):
-            wdg_last_attempt = now
-            status, data = wdgwars.fetch(cfg.WDGWARS_API_KEY, wdg_data, NETWORK)
-            wdg_status = status
-            if data is not None:
-                wdg_data = data
-            if status in ("LIVE", "ERROR", "NO KEY"):
-                wdg_last_sync = now
-
-    elif current == "wigle" and cfg.WIGLE_ENABLED:
-        due = entered or (now - wigle_last_sync >= cfg.WIGLE_REFRESH_MS)
-        if due and (now - wigle_last_attempt >= cfg.WIGLE_PAGE_ENTRY_COOLDOWN_MS):
-            wigle_last_attempt = now
-            status, data = wigle.fetch(cfg.WIGLE_API_NAME, cfg.WIGLE_API_TOKEN, wigle_data, NETWORK)
-            wigle_status = status
-            if data is not None:
-                wigle_data = data
-            if status in ("LIVE", "ERROR", "NO KEY"):
-                wigle_last_sync = now
+    if entered:
+        refresh_page_entry(now, current)
+    refresh_background(now)
 
 
 def draw():
@@ -524,7 +571,7 @@ def update():
     now = badge.ticks
     old_page = PAGES[page_index]
 
-    if now - last_input > cfg.INPUT_DELAY_MS:
+    if ticks_elapsed(now, last_input) > cfg.INPUT_DELAY_MS:
         if badge.pressed(BUTTON_C):
             page_index = 0
             last_input = now
@@ -549,5 +596,5 @@ def on_exit():
     pass
 
 
-if BADGEWARE_READY and _RUN is not None:
-    _RUN(update)
+if BADGEWARE_READY:
+    run(update)

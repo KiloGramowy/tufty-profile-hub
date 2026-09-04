@@ -7,7 +7,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "profile_hub"))
 
 from wdgwars import WDGWarsClient, fetch as fetch_wdgwars
-from wigle import WiGLEClient, basic_auth_header, fetch as fetch_wigle, normalize_stats
+from wigle import (
+    WiGLEClient,
+    basic_auth_header,
+    fetch as fetch_wigle,
+    normalize_runtime_data as normalize_wigle_runtime_data,
+    normalize_stats,
+)
 
 
 class FakeResponse:
@@ -91,7 +97,7 @@ class IntegrationTests(unittest.TestCase):
         )
         client = WDGWarsClient(api_key="demo", requests_module=requests, clock=clock)
 
-        self.assertTrue(client.should_auto_refresh())
+        self.assertFalse(client.should_auto_refresh())
         self.assertEqual(client.page_entry_refresh(), "ok")
         self.assertEqual(client.page_entry_refresh(), "cooldown")
         clock.advance(60)
@@ -137,6 +143,20 @@ class IntegrationTests(unittest.TestCase):
         self.assertFalse(client.should_auto_refresh())
         clock.advance(6 * 60 * 60)
         self.assertTrue(client.should_auto_refresh())
+
+    def test_wigle_runtime_username_falls_back_to_statistics_user_name(self):
+        normalized = normalize_wigle_runtime_data(
+            {"userid": ""},
+            {
+                "user": "",
+                "statistics": {
+                    "userName": "stats-user",
+                    "Rank": 100,
+                    "MonthRank": 11,
+                },
+            },
+        )
+        self.assertEqual(normalized["username"], "stats-user")
 
     def test_wigle_stats_field_variants(self):
         normalized = normalize_stats(

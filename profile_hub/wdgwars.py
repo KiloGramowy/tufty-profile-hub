@@ -211,7 +211,7 @@ class WDGWarsClient:
         self.requests = requests_module if requests_module is not None else _requests
         self.clock = clock or now_seconds
         self.network_manager = network_manager
-        self.last_refresh_at = None
+        self.last_refresh_at = self.clock()
         self.last_page_entry_refresh_at = None
         self.last_data = None
         self.last_status = "setup-required" if not self.credentials_ready() else "idle"
@@ -223,16 +223,12 @@ class WDGWarsClient:
     def should_auto_refresh(self):
         if not self.credentials_ready():
             return False
-        if self.last_refresh_at is None:
-            return True
         return self.clock() - self.last_refresh_at >= self.auto_refresh_seconds
 
     def should_page_entry_refresh(self):
         if not self.credentials_ready():
             return False
         now = self.clock()
-        if self.last_refresh_at is not None and now - self.last_refresh_at < self.cooldown_seconds:
-            return False
         if self.last_page_entry_refresh_at is None:
             return True
         return now - self.last_page_entry_refresh_at >= self.cooldown_seconds

@@ -115,9 +115,9 @@ The screen keeps the compact reliable subset: username, global rank, monthly ran
 
 ## 🔄 Refresh Policy
 
-Both integrations default to a 6-hour automatic refresh while Profile Hub is actively running.
+Profile Hub does not contact WDGWars or WiGLE automatically at app startup.
 
-When you enter the WDGWars or WiGLE page, Profile Hub attempts an immediate live refresh. A 60-second page-entry cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation.
+Both integrations become eligible for automatic refresh every 6 hours while Profile Hub is actively running, regardless of which Profile Hub page is displayed. Entering the WDGWars or WiGLE page also attempts an immediate live refresh. A 60-second per-integration cooldown prevents repeated requests from quick `NEXT` / `BACK` navigation, and a successful page-entry refresh resets that integration's next 6-hour automatic refresh.
 
 Profile Hub is a Badgeware app, not an operating-system daemon. It does not refresh while another Badgeware app is running, while the launcher is open, while the device is powered off, or while Profile Hub is not running.
 
@@ -141,7 +141,7 @@ Advanced users may add multiple networks to private `credentials.json`:
 }
 ```
 
-Profile Hub scans nearby networks and connects only to a configured SSID that is currently visible. If multiple configured networks are visible, it chooses the strongest signal, with configured order used as a tie-breaker.
+Profile Hub scans nearby networks and connects only to a configured SSID that is currently visible. If multiple configured networks are visible, it chooses the strongest signal, with configured order used as a tie-breaker. Hidden SSIDs may not be selectable by this scan-first logic because they may not appear in WLAN scan results.
 
 ## 🔐 Security
 

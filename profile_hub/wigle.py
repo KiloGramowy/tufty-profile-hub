@@ -127,10 +127,19 @@ def normalize_runtime_data(profile, stats):
             or profile.get("userId")
             or profile.get("userName")
             or profile.get("username")
+            or profile.get("user")
             or ""
         )
     if not username and isinstance(stats, dict):
-        username = str(stats.get("user") or stats.get("User") or "")
+        username = str(
+            stats.get("user")
+            or stats.get("User")
+            or stats.get("userName")
+            or stats.get("username")
+            or ""
+        )
+    if not username:
+        username = str(_get(blob, ("userName", "UserName", "username", "user"), ""))
 
     return {
         "username": username,
@@ -214,7 +223,7 @@ class WiGLEClient:
         self.requests = requests_module if requests_module is not None else _requests
         self.clock = clock or now_seconds
         self.network_manager = network_manager
-        self.last_refresh_at = None
+        self.last_refresh_at = self.clock()
         self.last_page_entry_refresh_at = None
         self.last_data = None
         self.last_status = "setup-required" if not self.credentials_ready() else "idle"
@@ -226,16 +235,12 @@ class WiGLEClient:
     def should_auto_refresh(self):
         if not self.credentials_ready():
             return False
-        if self.last_refresh_at is None:
-            return True
         return self.clock() - self.last_refresh_at >= self.auto_refresh_seconds
 
     def should_page_entry_refresh(self):
         if not self.credentials_ready():
             return False
         now = self.clock()
-        if self.last_refresh_at is not None and now - self.last_refresh_at < self.cooldown_seconds:
-            return False
         if self.last_page_entry_refresh_at is None:
             return True
         return now - self.last_page_entry_refresh_at >= self.cooldown_seconds
