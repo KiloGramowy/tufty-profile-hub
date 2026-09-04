@@ -71,6 +71,28 @@ class BuilderTests(unittest.TestCase):
             self.assertEqual(config_module.WIGLE_REFRESH_MS, 6 * 60 * 60 * 1000)
             self.assertEqual(config_module.WIGLE_PAGE_ENTRY_COOLDOWN_MS, 60 * 1000)
 
+    def test_attribution_is_hardcoded_in_runtime_not_generated_config(self):
+        runtime_text = (ROOT / "profile_hub" / "__init__.py").read_text(encoding="utf-8")
+        placeholder_config = (ROOT / "profile_hub" / "profile_config.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Built by KiloGramowy", runtime_text)
+        self.assertNotIn("Built by KiloGramowy", placeholder_config)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_dir = Path(temp_dir) / "profile_hub"
+            build_profile.build(
+                ROOT / "profile.example.json",
+                ROOT / "credentials.example.json",
+                out_dir,
+            )
+
+            generated_runtime = (out_dir / "__init__.py").read_text(encoding="utf-8")
+            generated_config = (out_dir / "profile_config.py").read_text(encoding="utf-8")
+            self.assertIn("Built by KiloGramowy", generated_runtime)
+            self.assertNotIn("Built by KiloGramowy", generated_config)
+
     def test_custom_link_is_appended_and_qr_generated(self):
         profile, credentials = self.load_examples()
         profile["links"].append(

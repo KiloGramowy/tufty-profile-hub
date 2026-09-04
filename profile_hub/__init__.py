@@ -1,4 +1,5 @@
 # Profile Hub for Pimoroni Tufty 2350 / Badgeware.
+# Copyright (c) 2026 KiloGramowy
 #
 # Runtime layout, drawing proportions, and navigation flow follow the
 # physically tested Tufty 2350 build. Configuration and QR data are generated
@@ -305,6 +306,7 @@ def draw_main():
 
     vtext(fit(cfg.PRIMARY_LABEL, W - 60, 20), 30, 166, 20, PCB_GREEN_BRIGHT)
     vtext(fit(cfg.TAGLINE, W - 60, 12), 30, 194, 12, DIM)
+    vright("Built by KiloGramowy", W - 20, 208, 8, DIM)
 
     footer()
 

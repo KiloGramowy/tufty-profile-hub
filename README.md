@@ -1,5 +1,9 @@
 # Tufty Profile Hub 📟
 
+**Created by [KiloGramowy](https://github.com/KiloGramowy)**
+
+[https://kilogramowy.pl](https://kilogramowy.pl)
+
 Configurable multi-page personal profile badge for the Pimoroni Tufty 2350 with QR pages, WDGWars and WiGLE integrations.
 
 Tufty Profile Hub turns a physically tested personal Badgeware app into a reusable open-source template. You edit small JSON files on your computer, run a builder, and copy the generated app folder to your Tufty 2350.
