@@ -8,6 +8,45 @@ Configurable multi-page personal profile badge for the Pimoroni Tufty 2350 with 
 
 Tufty Profile Hub turns a physically tested personal Badgeware app into a reusable open-source template. You edit small JSON files on your computer, run a builder, and copy the generated app folder to your Tufty 2350.
 
+![Tufty Profile Hub running on a physical Pimoroni Tufty 2350](docs/images/tufty-profile-hub-main.jpg)
+
+## 📸 Hardware Demo
+
+Profile Hub running on a physical Pimoroni Tufty 2350. WDGWars and WiGLE screens below show live data from the hardware-tested runtime.
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-website.jpg" alt="Website QR page on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>Website QR</strong>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-youtube.jpg" alt="YouTube QR page on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>YouTube QR</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-github.jpg" alt="GitHub QR page on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>GitHub QR</strong>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-wdgwars.jpg" alt="WDGWars LIVE screen on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>WDGWars LIVE</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-wigle.jpg" alt="WiGLE LIVE screen on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>WiGLE LIVE</strong>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/images/tufty-profile-hub-main.jpg" alt="Main profile screen on a physical Pimoroni Tufty 2350" width="380"><br>
+      <strong>Main profile</strong>
+    </td>
+  </tr>
+</table>
+
 ## ✨ Features
 
 - Configurable main profile page for name, role, primary label, and technical tagline.
@@ -179,6 +218,7 @@ Confirmed physical Tufty 2350 validation for this Stage 1 runtime baseline:
 
 - BadgeWare launcher visibility and app launch
 - Main, Website, YouTube, GitHub, WDGWars, and WiGLE pages
+- Website, YouTube, and GitHub QR pages
 - Responsive A/B/C forward/back/home navigation, including QR pages
 - WDGWars and WiGLE OFFLINE behaviour with no Wi-Fi
 - WDGWars and WiGLE LIVE data after adding credentials
