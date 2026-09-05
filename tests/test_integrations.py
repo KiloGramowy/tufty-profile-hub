@@ -493,8 +493,6 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotIn("iso-8859-1", text)
         self.assertNotIn("latin-1", text)
         self.assertNotIn("latin1", text)
-        self.assertNotIn("UNAUTH PROFILE", text)
-        self.assertNotIn("UA TEST", text)
         self.assertNotIn("LAST_HTTP_DETAILS", text)
 
 

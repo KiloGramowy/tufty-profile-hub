@@ -15,9 +15,6 @@ CACHE_PATH = "/profile_hub_cache.json"
 TEMP_PATH = "/profile_hub_cache.tmp"
 VERSION = 1
 WRITE_COOLDOWN_MS = 10 * 60 * 1000
-LAST_CACHE_ACTION = "INIT"
-LAST_CACHE_ERROR = ""
-LAST_CACHE_ACTIONS = {}
 
 WDGWARS_FIELDS = (
     "username",
@@ -58,39 +55,6 @@ def _is_safe_value(value):
     return value is None or isinstance(value, (str, int, float, bool))
 
 
-def _label(name):
-    if name == "wdgwars":
-        return "WDG"
-    if name == "wigle":
-        return "WIGLE"
-    return str(name).upper()
-
-
-def _set_diagnostic(action, error=None, name=None):
-    global LAST_CACHE_ACTION, LAST_CACHE_ERROR, LAST_CACHE_ACTIONS
-
-    LAST_CACHE_ACTION = action
-    if error is None:
-        LAST_CACHE_ERROR = ""
-        text = action
-    else:
-        try:
-            LAST_CACHE_ERROR = type(error).__name__ + " " + str(error)[:40]
-        except Exception:
-            LAST_CACHE_ERROR = type(error).__name__
-        text = LAST_CACHE_ERROR
-    if name is not None:
-        LAST_CACHE_ACTIONS[name] = text
-
-
-def diagnostic_text(name=None):
-    if name is not None and name in LAST_CACHE_ACTIONS:
-        return LAST_CACHE_ACTIONS.get(name)
-    if LAST_CACHE_ERROR:
-        return LAST_CACHE_ERROR
-    return LAST_CACHE_ACTION
-
-
 def sanitize_data(name, data):
     if not isinstance(data, dict):
         return None
@@ -113,21 +77,17 @@ def _empty_cache():
 
 def load_cache(path=CACHE_PATH):
     if json is None:
-        _set_diagnostic("JSON UNAVAILABLE")
         return _empty_cache()
 
     try:
         with open(path, "r") as handle:
             raw = json.load(handle)
     except OSError:
-        _set_diagnostic("NO CACHE")
         return _empty_cache()
-    except Exception as exc:
-        _set_diagnostic("LOAD FAILED", exc)
+    except Exception:
         return _empty_cache()
 
     if not isinstance(raw, dict) or raw.get("version") != VERSION:
-        _set_diagnostic("UNSUPPORTED CACHE")
         return _empty_cache()
 
     cache = _empty_cache()
@@ -138,7 +98,6 @@ def load_cache(path=CACHE_PATH):
         data = sanitize_data(name, entry.get("data"))
         if data is not None:
             cache[name] = {"data": data}
-    _set_diagnostic("LOAD OK")
     return cache
 
 
@@ -147,10 +106,7 @@ def load_integration(name, path=CACHE_PATH):
     entry = cache.get(name)
     if not isinstance(entry, dict):
         return None
-    data = entry.get("data")
-    if data is not None:
-        _set_diagnostic(_label(name) + " LOAD OK", name=name)
-    return data
+    return entry.get("data")
 
 
 def _path_exists(path):
@@ -191,7 +147,6 @@ def _write_cache(cache, path=CACHE_PATH, temp_path=TEMP_PATH):
         with open(temp_path, "w") as handle:
             json.dump(cache, handle)
     except Exception as exc:
-        _set_diagnostic("WRITE FAILED", exc)
         return False, exc
 
     rename_error = None
@@ -207,7 +162,6 @@ def _write_cache(cache, path=CACHE_PATH, temp_path=TEMP_PATH):
             _rename(temp_path, path)
             return True, None
         except Exception as exc:
-            _set_diagnostic("WRITE FAILED", exc)
             return False, exc
 
     try:
@@ -216,7 +170,6 @@ def _write_cache(cache, path=CACHE_PATH, temp_path=TEMP_PATH):
         return True, None
     except Exception as exc:
         error = rename_error or exc
-        _set_diagnostic("WRITE FAILED", error)
         return False, error
 
 
@@ -229,27 +182,21 @@ def save_integration(
     path=CACHE_PATH,
     temp_path=TEMP_PATH,
 ):
-    label = _label(name)
     clean = sanitize_data(name, data)
     if clean is None:
-        _set_diagnostic(label + " SKIP INVALID", name=name)
         return last_write_ms, False
 
     cache = load_cache(path)
     entry = cache.get(name)
     if isinstance(entry, dict) and entry.get("data") == clean:
-        _set_diagnostic(label + " SKIP SAME", name=name)
         return last_write_ms, False
 
     if last_write_ms is not None and int(now_ms) - int(last_write_ms) < min_interval_ms:
-        _set_diagnostic(label + " SKIP COOLDOWN", name=name)
         return last_write_ms, False
 
     cache[name] = {"data": clean}
-    ok, error = _write_cache(cache, path, temp_path)
+    ok, _error = _write_cache(cache, path, temp_path)
     if not ok:
-        _set_diagnostic(label + " WRITE FAILED", error, name=name)
         return last_write_ms, False
 
-    _set_diagnostic(label + " WRITE OK", name=name)
     return now_ms, True

@@ -232,7 +232,7 @@ class PersistentCacheTests(unittest.TestCase):
         self.assertEqual(last_write, 1000)
         self.assertNotIn("rank_all", self.load_json()["wdgwars"]["data"])
 
-    def test_write_failure_reports_diagnostic_without_exception(self):
+    def test_write_failure_returns_false_without_exception(self):
         original_open = open
 
         def failing_open(path, mode="r"):
@@ -247,10 +247,8 @@ class PersistentCacheTests(unittest.TestCase):
 
         self.assertFalse(wrote)
         self.assertIsNone(last_write)
-        self.assertIn("WRITE FAILED", persistent_cache.LAST_CACHE_ACTION)
-        self.assertIn("OSError", persistent_cache.LAST_CACHE_ERROR)
 
-    def test_per_integration_load_diagnostic_is_unambiguous(self):
+    def test_integrations_load_independently_from_same_cache(self):
         self.write_json(
             {
                 "version": 1,
@@ -259,11 +257,14 @@ class PersistentCacheTests(unittest.TestCase):
             }
         )
 
-        persistent_cache.load_integration("wdgwars", str(self.path))
-        persistent_cache.load_integration("wigle", str(self.path))
-
-        self.assertEqual(persistent_cache.diagnostic_text("wdgwars"), "WDG LOAD OK")
-        self.assertEqual(persistent_cache.diagnostic_text("wigle"), "WIGLE LOAD OK")
+        self.assertEqual(
+            persistent_cache.load_integration("wdgwars", str(self.path)),
+            {"username": "wdg"},
+        )
+        self.assertEqual(
+            persistent_cache.load_integration("wigle", str(self.path)),
+            {"username": "wigle"},
+        )
 
 
 if __name__ == "__main__":
