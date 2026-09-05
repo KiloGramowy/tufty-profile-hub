@@ -17,6 +17,7 @@ APP_NAME = "profile_hub"
 APP_FILES = (
     "__init__.py",
     "icon.png",
+    "persistent_cache.py",
     "safe_wifi.py",
     "wdgwars.py",
     "wigle.py",

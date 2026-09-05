@@ -39,11 +39,13 @@ _bootstrap_app_dir()
 try:
     from . import profile_config as cfg
     from .generated_qr import QR_CODES
+    from . import persistent_cache
     from . import wdgwars
     from . import wigle
 except ImportError:  # Badgeware loads app-folder modules as top-level files.
     import profile_config as cfg
     from generated_qr import QR_CODES
+    import persistent_cache
     import wdgwars
     import wigle
 
@@ -122,6 +124,8 @@ wigle_data = None
 wigle_status = "IDLE"
 wigle_last_sync = -cfg.WIGLE_REFRESH_MS
 wigle_last_attempt = -getattr(cfg, "WIGLE_PAGE_ENTRY_COOLDOWN_MS", cfg.RETRY_MS)
+wdg_cache_last_write = None
+wigle_cache_last_write = None
 
 AUTO_BRIGHTNESS_DEFAULT = 0.70
 AUTO_BRIGHTNESS_SAMPLE_MS = 250
@@ -149,6 +153,56 @@ def _wdg_cooldown_ms():
 
 def _wigle_cooldown_ms():
     return getattr(cfg, "WIGLE_PAGE_ENTRY_COOLDOWN_MS", cfg.RETRY_MS)
+
+
+def load_persistent_stats():
+    global wdg_data, wdg_status, wigle_data, wigle_status
+
+    if getattr(cfg, "WDGWARS_API_KEY", ""):
+        try:
+            cached = persistent_cache.load_integration("wdgwars")
+        except Exception:
+            cached = None
+        if cached is not None:
+            wdg_data = cached
+            wdg_status = "CACHED"
+
+    if getattr(cfg, "WIGLE_API_NAME", "") and getattr(cfg, "WIGLE_API_TOKEN", ""):
+        try:
+            cached = persistent_cache.load_integration("wigle")
+        except Exception:
+            cached = None
+        if cached is not None:
+            wigle_data = cached
+            wigle_status = "CACHED"
+
+
+def persist_wdgwars(now):
+    global wdg_cache_last_write
+
+    try:
+        wdg_cache_last_write, _ = persistent_cache.save_integration(
+            "wdgwars",
+            wdg_data,
+            now,
+            wdg_cache_last_write,
+        )
+    except Exception:
+        pass
+
+
+def persist_wigle(now):
+    global wigle_cache_last_write
+
+    try:
+        wigle_cache_last_write, _ = persistent_cache.save_integration(
+            "wigle",
+            wigle_data,
+            now,
+            wigle_cache_last_write,
+        )
+    except Exception:
+        pass
 
 
 def _clamp(value, low, high):
@@ -238,6 +292,7 @@ def update_auto_brightness(now):
 
 
 apply_startup_brightness()
+load_persistent_stats()
 
 
 def vmeasure(text, size):
@@ -598,6 +653,11 @@ def refresh_current(now, entered=False):
             wdg_status = status
             if data is not None:
                 wdg_data = data
+            if status in ("OFFLINE", "ERROR") and wdg_data is not None:
+                wdg_status = "CACHED"
+                status = "CACHED"
+            if status == "LIVE":
+                persist_wdgwars(now)
             if status in ("LIVE", "ERROR", "NO KEY", "OFFLINE", "CACHED"):
                 wdg_last_sync = now
 
@@ -609,6 +669,11 @@ def refresh_current(now, entered=False):
             wigle_status = status
             if data is not None:
                 wigle_data = data
+            if status in ("OFFLINE", "ERROR") and wigle_data is not None:
+                wigle_status = "CACHED"
+                status = "CACHED"
+            if status == "LIVE":
+                persist_wigle(now)
             if status in ("LIVE", "ERROR", "NO KEY", "OFFLINE", "CACHED"):
                 wigle_last_sync = now
 

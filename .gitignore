@@ -8,6 +8,11 @@ venv/
 profile.json
 credentials.json
 dist/
+*.zip
+profile_hub_cache.json
+profile_hub_cache.tmp
+profile_hub/profile_hub_cache.json
+profile_hub/profile_hub_cache.tmp
 
 .DS_Store
 Thumbs.db

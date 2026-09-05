@@ -45,6 +45,27 @@ class ConnectingFetcher:
         return "CONNECTING", previous
 
 
+class FakePersistentCache:
+    def __init__(self, cached=None):
+        self.cached = cached or {}
+        self.loads = []
+        self.saves = []
+
+    def load_integration(self, name):
+        self.loads.append(name)
+        return self.cached.get(name)
+
+    def save_integration(self, name, data, now_ms, last_write_ms):
+        self.saves.append((name, data, now_ms, last_write_ms))
+        return now_ms, True
+
+
+class FailingPersistentCache(FakePersistentCache):
+    def save_integration(self, name, data, now_ms, last_write_ms):
+        self.saves.append((name, data, now_ms, last_write_ms))
+        raise OSError("rename failed")
+
+
 class FakeBadge:
     def __init__(self, ticks, pressed=()):
         self.ticks = ticks
@@ -61,6 +82,8 @@ class RuntimeRefreshTests(unittest.TestCase):
         self.wigle_fetch = Fetcher("wigle")
         runtime.wdgwars.fetch = self.wdg_fetch
         runtime.wigle.fetch = self.wigle_fetch
+        self.cache = FakePersistentCache()
+        runtime.persistent_cache = self.cache
         self.configure_runtime()
 
     def configure_runtime(
@@ -101,6 +124,8 @@ class RuntimeRefreshTests(unittest.TestCase):
         runtime.wigle_status = "IDLE"
         runtime.wigle_last_sync = -SIX_HOURS_MS
         runtime.wigle_last_attempt = -COOLDOWN_MS
+        runtime.wdg_cache_last_write = None
+        runtime.wigle_cache_last_write = None
         runtime.BUTTON_A = "A"
         runtime.BUTTON_B = "B"
         runtime.BUTTON_C = "C"
@@ -166,7 +191,7 @@ class RuntimeRefreshTests(unittest.TestCase):
         runtime.refresh_current(1000, entered=True)
 
         self.assertIs(runtime.wdg_data, previous)
-        self.assertEqual(runtime.wdg_status, "OFFLINE")
+        self.assertEqual(runtime.wdg_status, "CACHED")
         self.assertEqual(runtime.wdg_last_sync, 1000)
 
     def test_offline_failure_preserves_wigle_cached_data(self):
@@ -178,7 +203,7 @@ class RuntimeRefreshTests(unittest.TestCase):
         runtime.refresh_current(1000, entered=True)
 
         self.assertIs(runtime.wigle_data, previous)
-        self.assertEqual(runtime.wigle_status, "OFFLINE")
+        self.assertEqual(runtime.wigle_status, "CACHED")
         self.assertEqual(runtime.wigle_last_sync, 1000)
 
     def test_connecting_status_does_not_replace_cached_data_or_sync_time(self):
@@ -227,6 +252,112 @@ class RuntimeRefreshTests(unittest.TestCase):
 
         self.assertEqual(runtime.wdg_status, "NO KEY")
         self.assertEqual(runtime.wigle_status, "NO KEY")
+
+    def test_valid_wdgwars_cache_restores_data_as_cached_without_api_request(self):
+        cached = {"username": "cached", "rank_all": 2}
+        self.cache = FakePersistentCache({"wdgwars": cached})
+        runtime.persistent_cache = self.cache
+
+        runtime.load_persistent_stats()
+
+        self.assertIs(runtime.wdg_data, cached)
+        self.assertEqual(runtime.wdg_status, "CACHED")
+        self.assertEqual(self.wdg_fetch.calls, [])
+
+    def test_valid_wigle_cache_restores_data_as_cached_without_api_request(self):
+        cached = {"username": "cached", "global_rank": 100}
+        self.cache = FakePersistentCache({"wigle": cached})
+        runtime.persistent_cache = self.cache
+
+        runtime.load_persistent_stats()
+
+        self.assertIs(runtime.wigle_data, cached)
+        self.assertEqual(runtime.wigle_status, "CACHED")
+        self.assertEqual(self.wigle_fetch.calls, [])
+
+    def test_cache_restore_requires_configured_credentials(self):
+        cached = {
+            "wdgwars": {"username": "cached"},
+            "wigle": {"username": "cached"},
+        }
+        self.configure_runtime(wdg_key="", wigle_name="", wigle_token="")
+        self.cache = FakePersistentCache(cached)
+        runtime.persistent_cache = self.cache
+
+        runtime.load_persistent_stats()
+
+        self.assertIsNone(runtime.wdg_data)
+        self.assertIsNone(runtime.wigle_data)
+        self.assertEqual(runtime.wdg_status, "IDLE")
+        self.assertEqual(runtime.wigle_status, "IDLE")
+
+    def test_successful_live_wdgwars_fetch_persists_data(self):
+        runtime.page_index = 1
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertEqual(
+            self.cache.saves,
+            [("wdgwars", {"wdg": 1}, 1000, None)],
+        )
+
+    def test_successful_live_wigle_fetch_persists_data(self):
+        runtime.page_index = 2
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertEqual(
+            self.cache.saves,
+            [("wigle", {"wigle": 1}, 1000, None)],
+        )
+
+    def test_failed_fetch_never_persists_over_previous_good_data(self):
+        previous = {"username": "cached", "rank_all": 1}
+        runtime.page_index = 1
+        runtime.wdg_data = previous
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertIs(runtime.wdg_data, previous)
+        self.assertEqual(runtime.wdg_status, "CACHED")
+        self.assertEqual(self.cache.saves, [])
+
+    def test_offline_with_persistent_data_remains_cached(self):
+        cached = {"username": "cached", "rank_all": 2}
+        self.cache = FakePersistentCache({"wdgwars": cached})
+        runtime.persistent_cache = self.cache
+        runtime.load_persistent_stats()
+        runtime.page_index = 1
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertIs(runtime.wdg_data, cached)
+        self.assertEqual(runtime.wdg_status, "CACHED")
+
+    def test_offline_without_cache_remains_offline(self):
+        runtime.page_index = 1
+        runtime.wdgwars.fetch = OfflineFetcher()
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertIsNone(runtime.wdg_data)
+        self.assertEqual(runtime.wdg_status, "OFFLINE")
+
+    def test_simulated_rename_failure_does_not_destroy_ram_data(self):
+        self.cache = FailingPersistentCache()
+        runtime.persistent_cache = self.cache
+        runtime.page_index = 1
+
+        runtime.refresh_current(1000, entered=True)
+
+        self.assertEqual(runtime.wdg_status, "LIVE")
+        self.assertEqual(runtime.wdg_data, {"wdg": 1})
+        self.assertEqual(
+            self.cache.saves,
+            [("wdgwars", {"wdg": 1}, 1000, None)],
+        )
 
 
 if __name__ == "__main__":

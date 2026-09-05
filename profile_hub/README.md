@@ -15,6 +15,7 @@ See the root [README hardware demo](../README.md#-hardware-demo) for physical Tu
 - `__init__.py` - Badgeware app and screen renderer.
 - `profile_config.py` - public placeholder, replaced during build.
 - `generated_qr.py` - public placeholder, replaced during build.
+- `persistent_cache.py` - runtime last-known-good stats cache helper.
 - `safe_wifi.py` - non-fatal `/secrets.py` Wi-Fi state helper.
 - `wdgwars.py` - WDGWars client and parser.
 - `wigle.py` - WiGLE client and parser.

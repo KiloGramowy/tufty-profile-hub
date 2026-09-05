@@ -4,6 +4,8 @@
 
 [https://kilogramowy.pl](https://kilogramowy.pl)
 
+Project: [https://github.com/KiloGramowy/tufty-profile-hub](https://github.com/KiloGramowy/tufty-profile-hub)
+
 Configurable multi-page personal profile badge for the Pimoroni Tufty 2350 with QR pages, WDGWars and WiGLE integrations.
 
 Tufty Profile Hub turns a physically tested personal Badgeware app into a reusable open-source template. You edit small JSON files on your computer, run a builder, and copy the generated app folder to your Tufty 2350.
@@ -57,6 +59,7 @@ Profile Hub running on a physical Pimoroni Tufty 2350. WDGWars and WiGLE screens
 - WiGLE.net integration with setup-safe blank credentials.
 - Standard Pimoroni `/secrets.py` Wi-Fi with non-fatal offline handling.
 - Automatic ambient-light display brightness using Tufty 2350's built-in light sensor.
+- Persistent last-known WDGWars and WiGLE statistics survive restarts and offline starts.
 - Host-side QR generation, so Tufty does not need `qrcode` or Pillow.
 - 24x24 PNG launcher icon inspired by the XIAO ESP32-C5 board shape.
 
@@ -95,7 +98,7 @@ TUFTY:/apps/profile_hub/
 
 Do not commit generated builds. `dist/profile_hub/` may contain private Wi-Fi or API credentials.
 
-## 🛠️ Configuration
+## 🛠️ Customisation
 
 Identity text lives in `profile.json`:
 
@@ -169,6 +172,14 @@ Loss of Wi-Fi is treated as a normal non-fatal condition. If live statistics wer
 
 Stage 1 still performs the real API HTTP request synchronously after Wi-Fi is connected. A short temporary pause during a live WDGWars or WiGLE request is expected and documented; it is not a crash or fatal Wi-Fi error.
 
+## 💾 Persistent Stats Cache
+
+Successful WDGWars and WiGLE results are stored locally on the Tufty as last-known-good display data. The statistics survive app exit, launcher use, reboot, and power cycle; if Profile Hub starts without Internet later, previous values load immediately with `CACHED` status.
+
+When a new live fetch succeeds, it replaces the old local snapshot. API credentials and Wi-Fi passwords are never stored in the cache, and identical data is not repeatedly written to flash.
+
+The cache is written to the Tufty's writable LittleFS root as `/profile_hub_cache.json`. It is not stored under `/system/apps/profile_hub/`, because `/system` is read-only during normal Badgeware execution and may be the filesystem exposed by Windows Disk Mode.
+
 ## 📶 Wi-Fi
 
 By default, Profile Hub is compatible with Pimoroni's standard root `/secrets.py`:
@@ -227,6 +238,8 @@ Confirmed physical Tufty 2350 validation for this Stage 1 runtime baseline:
 - Responsive A/B/C forward/back/home navigation, including QR pages
 - WDGWars and WiGLE OFFLINE behaviour with no Wi-Fi
 - WDGWars and WiGLE LIVE data after adding credentials
+- Persistent WDGWars/WiGLE cache restore after full restart and power cycle
+- Automatic brightness response in dark and bright conditions
 - No fatal grey system Wi-Fi error and no forced reset
 
 ## 📚 Docs

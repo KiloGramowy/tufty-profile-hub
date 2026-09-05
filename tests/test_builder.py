@@ -43,6 +43,7 @@ class BuilderTests(unittest.TestCase):
             )
             self.assertTrue((out_dir / "__init__.py").exists())
             self.assertTrue((out_dir / "safe_wifi.py").exists())
+            self.assertTrue((out_dir / "persistent_cache.py").exists())
             self.assertFalse((out_dir / "network_manager.py").exists())
             self.assertTrue((out_dir / "profile_config.py").exists())
             self.assertTrue((out_dir / "generated_qr.py").exists())
